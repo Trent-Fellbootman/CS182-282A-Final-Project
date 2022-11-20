@@ -7,3 +7,14 @@ class ConvCustom(linen.Module):
         
         if batch_norm:
             self.batchnorm = linen.BatchNorm()
+
+class CycleGAN:
+    def __init__(self, generator: nn.Module, discriminator: nn.Module):
+        loss = # TODO
+        pass
+
+
+class GAN:
+    def __init__(self, generator: nn.Module):
+        loss = # TODO
+        pass

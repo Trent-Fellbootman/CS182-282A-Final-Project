@@ -1,1 +1,2 @@
-Sunday afternoon, meet
+- Sunday afternoon, meet: DONE
+- Tue, Nov 22, 4-5pm

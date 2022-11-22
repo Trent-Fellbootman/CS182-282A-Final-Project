@@ -1,7 +1,7 @@
 import jax
 from jax import numpy as jnp, random
 from jax import tree_util
-from typing import List, Iterable
+from typing import List, Iterable, Callable, Dict, Tuple
 from tqdm import tqdm
 
 """This file implements the dataset base class.
@@ -60,7 +60,7 @@ class DataLoader:
     An object of this class is STATEFUL.
 
     You should not need to inherit from this class directly.
-    
+
     ## Note
     - Prefetch is performed automatically in constructor.
     """
@@ -83,15 +83,15 @@ class DataLoader:
         self.__max_index = len(dataset) // self.__batch_size - 1
 
         self.__samples = [dataset[index] for index in range(len(dataset))]
-        
+
         # to be filled
         self.__batches = []
         self.reshuffle()
-    
+
     @property
     def batch_size(self):
         return self.__batch_size
-    
+
     @property
     def auto_reshuffle(self):
         return self.__auto_reshuffle
@@ -107,7 +107,7 @@ class DataLoader:
 
     def reshuffle(self, key: random.KeyArray | None = None):
         """Reshuffles and re-batches the data loader IN PLACE.
-        
+
         Batches are regenerated.
 
         You should NOT call this method directly.
@@ -115,7 +115,7 @@ class DataLoader:
         Args:
             key (random.KeyArray | None, optional): PRNG key to be used. If None, use the key in current state and update current state.
         """
-        
+
         if self.__current_index != 0:
             raise Exception("This dataloader is currently in iteration!")
 
@@ -123,41 +123,80 @@ class DataLoader:
             self.__key, key = random.split(self.__key)
         else:
             key = key
-        
+
         permutation = random.permutation(key, len(self.__samples))
 
         self.__samples = [self.__samples[index] for index in permutation]
         self.__init_batches()
-    
+
     def __iter__(self):
         if self.__current_index != 0:
             raise Exception("This dataloader is currently in iteration!")
-        
+
         return self
 
     def __next__(self):
         if self.__current_index > self.__max_index:
             self.__current_index = 0
-            
+
             if self.__auto_reshuffle:
                 self.reshuffle()
-            
+
             raise StopIteration
         else:
             ret = self.__batches[self.__current_index]
             self.__current_index += 1
 
             return ret
-    
+
     def restart_iteration(self):
         """Restart iteration. No reshuffling / rebatching happens.
         """
-        
+
         self.__current_index = 0
 
 
-class Dummy(Dataset):
+class Distribution:
+    """Distribution base class.
+
+    To make your own distribution, implement two methods:
+
+    - `__init__(self)`: constructor.
+    - `draw_sample(self, n_samples: int)`: sampler. When called, should return a batch
+    of `n_samples` samples.
+    """
+
+    def __init__(self):
+        pass
+
+    def draw_sample(self, n_samples: int):
+        pass
+
+
+class PointDistribution(Distribution):
+
+    def __init__(self, n_dims: int,
+                 sampler: Tuple[Callable, Dict] = (
+                     random.uniform,
+                     {'minval': 0, 'maxval': 1}
+                 ),
+                 key: random.KeyArray = random.PRNGKey(0)):
+        
+        super().__init__()
+        
+        self.__n_dims = n_dims
+        self.__sampler_function = sampler[0]
+        self.__sampler_configs = sampler[1]
+        self.__random_state = key
     
+    def draw_sample(self, n_samples: int):
+        self.__random_state, key = random.split(self.__random_state)
+        
+        return self.__sampler_function(key=key, shape=(n_samples, self.__n_dims), **self.__sampler_configs)
+
+
+class Dummy(Dataset):
+
     def __init__(self, num: int):
         super().__init__()
         self.upperbound = num

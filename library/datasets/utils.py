@@ -205,3 +205,6 @@ class TensorDataset(Dataset):
     
     def __len__(self):
         return self.__num_samples
+    
+    def get_tensors(self):
+        return tuple([jnp.copy(tensor) for tensor in self.__tensors])

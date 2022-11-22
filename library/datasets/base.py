@@ -75,26 +75,34 @@ class DataLoader:
             auto_reshuffle (bool): whether or not to reshuffle the dataset after each iteration.
         """
 
-        self.key = key
-        self.batch_size = batch_size
-        self.auto_reshuffle = auto_reshuffle
+        self.__key = key
+        self.__batch_size = batch_size
+        self.__auto_reshuffle = auto_reshuffle
 
-        self._current_index = 0
-        self._max_index = len(dataset) // self.batch_size - 1
+        self.__current_index = 0
+        self.__max_index = len(dataset) // self.__batch_size - 1
 
-        self.samples = [dataset[index] for index in range(len(dataset))]
+        self.__samples = [dataset[index] for index in range(len(dataset))]
         
         # to be filled
-        self.batches = []
+        self.__batches = []
         self.reshuffle()
+    
+    @property
+    def batch_size(self):
+        return self.__batch_size
+    
+    @property
+    def auto_reshuffle(self):
+        return self.__auto_reshuffle
 
-    def _init_batches(self):
-        start_indices = list(range(0, len(self.samples) - self.batch_size + 1,
-                                   self.batch_size))
+    def __init_batches(self):
+        start_indices = list(range(0, len(self.__samples) - self.__batch_size + 1,
+                                   self.__batch_size))
 
-        self.batches = [tree_util.tree_map(
+        self.__batches = [tree_util.tree_map(
             lambda *args: jnp.array(args),
-            *self.samples[index: index + self.batch_size])
+            *self.__samples[index: index + self.__batch_size])
             for index in start_indices]
 
     def reshuffle(self, key: random.KeyArray | None = None):
@@ -108,36 +116,36 @@ class DataLoader:
             key (random.KeyArray | None, optional): PRNG key to be used. If None, use the key in current state and update current state.
         """
         
-        if self._current_index != 0:
+        if self.__current_index != 0:
             raise Exception("This dataloader is currently in iteration!")
 
         if key is None:
-            self.key, key = random.split(self.key)
+            self.__key, key = random.split(self.__key)
         else:
             key = key
         
-        permutation = random.permutation(key, len(self.samples))
+        permutation = random.permutation(key, len(self.__samples))
 
-        self.samples = [self.samples[index] for index in permutation]
-        self._init_batches()
+        self.__samples = [self.__samples[index] for index in permutation]
+        self.__init_batches()
     
     def __iter__(self):
-        if self._current_index != 0:
+        if self.__current_index != 0:
             raise Exception("This dataloader is currently in iteration!")
         
         return self
 
     def __next__(self):
-        if self._current_index > self._max_index:
-            self._current_index = 0
+        if self.__current_index > self.__max_index:
+            self.__current_index = 0
             
-            if self.auto_reshuffle:
+            if self.__auto_reshuffle:
                 self.reshuffle()
             
             raise StopIteration
         else:
-            ret = self.batches[self._current_index]
-            self._current_index += 1
+            ret = self.__batches[self.__current_index]
+            self.__current_index += 1
 
             return ret
     
@@ -145,19 +153,19 @@ class DataLoader:
         """Restart iteration. No reshuffling / rebatching happens.
         """
         
-        self._current_index = 0
+        self.__current_index = 0
 
 
-class Dummy(Dataset):
+# class Dummy(Dataset):
 
-    def __init__(self, num: int):
-        super().__init__()
-        self.upperbound = num
+#     def __init__(self, num: int):
+#         super().__init__()
+#         self.upperbound = num
 
-    def __getitem__(self, index: int):
-        assert -self.upperbound <= index < self.upperbound, "out of bound!"
-        val = self.upperbound + index if index < 0 else index
-        return (val, (val ** 2, (val ** 3,)))
+#     def __getitem__(self, index: int):
+#         assert -self.upperbound <= index < self.upperbound, "out of bound!"
+#         val = self.upperbound + index if index < 0 else index
+#         return (val, (val ** 2, (val ** 3,)))
 
-    def __len__(self):
-        return self.upperbound
+#     def __len__(self):
+#         return self.upperbound

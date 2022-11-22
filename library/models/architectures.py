@@ -8,18 +8,29 @@ class MLP(nn.Module):
     '''
     hidden_sizes: Sequence[int]
     out_size: int
-    activation: nn.Module
+    apply_batchnorm: bool
+    apply_layer_activation: bool
+    output_activation: nn.Module
 
     def setup(self):
         self.layers = [nn.Dense(features=h) for h in self.hidden_sizes]
         self.output_layer = nn.Dense(features=self.out_size)
+        if self.apply_layer_activation:
+            self.layer_activation = nn.relu
+        if self.apply_batchnorm:
+            self.batchnorm = nn.BatchNorm()
+
 
     def __call__(self, inputs):
         x = inputs
         for layer in self.layers:
             x = layer(x)
+            #if self.apply_batchnorm:
+            #    x = self.batchnorm(x, use_running_average=False)
+            if self.apply_layer_activation:
+                x = self.layer_activation(x)
         x = self.output_layer(x)
-        x = self.activation(x)
+        x = self.output_activation(x)
         return x
 
 class Conv(nn.Module):
@@ -46,7 +57,7 @@ class Conv(nn.Module):
 
 def test_mlp():
     from jax import random
-    mlp = MLP([16, 32], 2, nn.relu)
+    mlp = MLP([16, 32], 2, True, True, nn.relu)
     key1, key2 = random.split(random.PRNGKey(0), 2)
     x = random.uniform(key1, (1,2))
     params = mlp.init(key2, x)
@@ -65,4 +76,4 @@ def test_conv():
     print(y.shape)
 
 if __name__ == "__main__":
-    test_conv()
+    test_mlp()

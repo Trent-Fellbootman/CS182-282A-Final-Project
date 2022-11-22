@@ -1,6 +1,8 @@
 from jax import numpy as jnp, random
-from typing import List, Tuple
-from base import Dataset
+from typing import List, Tuple, Callable, Dict, Any
+from base import Dataset, Distribution, TensorDataset
+from jax import tree_util
+
 
 class Polynomial:
     """Callable polynomial class.
@@ -21,14 +23,14 @@ class Polynomial:
             assert len(exponents) == self.__num_vars
 
         self.__specifiers = specifiers
-    
+
     @property
     def term_count(self):
         """the number of terms of this polynomial.
         """
-        
+
         return len(self.__specifiers)
-    
+
     @property
     def input_dimension(self):
         return self.__num_vars
@@ -40,7 +42,8 @@ class Polynomial:
             X (jnp.ndarray): input values. Last axis refers to different entries. All other dimensions refer to batch dimensions.
         """
 
-        assert len(X.shape) > 0 and X.shape[-1] == self.__num_vars, "Unmatched dimensionality of input data!"
+        assert len(
+            X.shape) > 0 and X.shape[-1] == self.__num_vars, "Unmatched dimensionality of input data!"
 
         columns = [X[..., index] for index in range(self.__num_vars)]
 
@@ -57,7 +60,7 @@ class Polynomial:
     @staticmethod
     def __enumerateAllTerms(dimension: int, max_order: int):
         """Enumerate all possible polynomial terms.
-        
+
         You should NOT call this function directly.
 
         Args:
@@ -102,9 +105,10 @@ class Polynomial:
         return Polynomial(
             list(
                 zip(
-                    list(random.uniform(key, (len(allTerms),), minval=-coeff_range, maxval=coeff_range)),
+                    list(random.uniform(key, (len(allTerms),),
+                         minval=-coeff_range, maxval=coeff_range)),
                     allTerms)))
-    
+
     def __str__(self):
         terms = []
         for coeff, exponents in self.__specifiers:
@@ -117,49 +121,50 @@ class Polynomial:
                 terms.append(f"{coeff:.2e} {' '.join(sub_terms)}")
             else:
                 terms.append(f'{coeff:.2e}')
-        
+
         return ' + '.join(terms)
 
-class PolynomialPointSampler:
+
+class PolynomialTransformation:
     """Multioutput polynomial class.
     """
-    
+
     def __init__(self, *polynomials: Polynomial):
         """Constructor.
-        
+
         Args:
             *polynomials (Polynomial): The polynomials at each output dimension.
         """
-        
+
         assert len(polynomials) > 0, "There must be at least one polynomial!"
-        
+
         self.__input_dimension = polynomials[0].input_dimension
         self.__output_dimension = len(polynomials)
-        
+
         for polynomial in polynomials:
             assert self.__input_dimension == polynomial.input_dimension
-        
+
         self.__polynomials = tuple(polynomials)
-    
+
     def __call__(self, X: jnp.ndarray):
         """batch-evaluate the multi-output polynomial.
 
         Args:
             X (jnp.ndarray): input values. Last axis refers to different entries. All other dimensions refer to batch dimensions.
         """
-        
+
         return jnp.stack([polynomial(X) for polynomial in self.__polynomials], axis=-1)
-    
+
     @property
     def output_dimension(self):
         return self.__output_dimension
-    
+
     @property
     def input_dimension(self):
         return self.__input_dimension
-    
-    def generateRandomSampler(input_dimension: int, output_dimension: int,
-                                 max_order: int, coeff_range: float, key: random.KeyArray = random.PRNGKey(0)):
+
+    def generate_random(input_dimension: int, output_dimension: int,
+                              max_order: int, coeff_range: float, key: random.KeyArray = random.PRNGKey(0)):
         """Generate a random multi-output polynomial.
 
         Args:
@@ -169,42 +174,70 @@ class PolynomialPointSampler:
             `coeff_range` (float): The range of the coefficients. Coefficients will be distributed uniformly within `[-coeff_range, coeff_range)`.
             `key` (random.KeyArray, optional): The PRNG key to use. Defaults to random.PRNGKey(0).
         """
-        
+
         keys = tuple(random.split(key, num=output_dimension))
-        
-        polynomials = [Polynomial.generateRandomPolynomial(input_dimension, max_order, coeff_range, rng_key) for rng_key in keys]
-        
-        return PolynomialPointSampler(*polynomials)
+
+        polynomials = [Polynomial.generateRandomPolynomial(
+            input_dimension, max_order, coeff_range, rng_key) for rng_key in keys]
+
+        return PolynomialTransformation(*polynomials)
+
+    def __str__(self):
+        return f"({', '.join([f'x_{i}' for i in range(self.input_dimension)])}) ->\n" + '(' + \
+            ',\n'.join(['' + str(poly) for poly in self.__polynomials]) + ')'
+
+
+class PointDistribution(Distribution):
+
+    def __init__(self, n_dims: int,
+                 sampler: Tuple[Callable, Dict] = (
+                     random.uniform,
+                     {'minval': 0, 'maxval': 1}
+                 ),
+                 key: random.KeyArray = random.PRNGKey(0)):
+
+        super().__init__()
+
+        self.__n_dims = n_dims
+        self.__sampler_function = sampler[0]
+        self.__sampler_configs = sampler[1]
+        self.__random_state = key
+
+    @property
+    def n_dims(self):
+        return self.__n_dims
+
+    def draw_samples(self, n_samples: int, key: random.KeyArray = None):
+        """Batch-draw samples.
+
+        Args:
+            n_samples (int): The number of samples to draw.
+            key (random.KeyArray): The random key to use. If None, use self.__random_state and update the state.
+            If not None, random state will NOT be updated.
+
+        Returns:
+            jnp.ndarray: Generated samples. Last dimension is feature dimension.
+        """
+
+        if key is None:
+            self.__random_state, key = random.split(self.__random_state)
+
+        return self.__sampler_function(key=key, shape=(n_samples, self.__n_dims), **self.__sampler_configs)
     
     def __str__(self):
-        return '\n'.join([str(poly) for poly in self.__polynomials])
+        return f'dimensionality: {self.n_dims}\nsampler: {self.__sampler_function}\nsampler configs: {self.__sampler_configs}'
 
-class TensorDataset(Dataset):
-    """Tensor dataset.
-    """
-    
-    def __init__(self, *tensors: List[jnp.ndarray]):
-        """Constructor.
-        
-        Args:
-            `*tensors`: A list of tensors. All tensors must have the same size in the first dimension, which is treated as the batch dimension.
-        """
-        assert len(tensors) > 0, "There must be at least one tensor!"
-        
-        self.__num_samples = tensors[0].shape[0]
-        
-        for tensor in tensors:
-            assert tensor.shape[0] == self.__num_samples
-        
+
+class Dummy(Dataset):
+
+    def __init__(self, num: int):
         super().__init__()
-        
-        self.__tensors = tuple(tensors)
-    
+        self.upperbound = num
+
     def __getitem__(self, index: int):
-        return tuple(tensor[index] for tensor in self.__tensors)
-    
+        assert -self.upperbound <= index < self.upperbound, "out of bound!"
+        val = self.upperbound + index if index < 0 else index
+        return (val, (val ** 2, (val ** 3,)))
+
     def __len__(self):
-        return self.__num_samples
-    
-    def get_tensors(self):
-        return tuple([jnp.copy(tensor) for tensor in self.__tensors])
+        return self.upperbound

@@ -1,7 +1,7 @@
 import jax
 from jax import numpy as jnp, random
 from jax import tree_util
-from typing import List, Iterable, Callable, Dict, Tuple
+from typing import List, Iterable, Callable, Dict, Tuple, Any
 from tqdm import tqdm
 
 """This file implements the dataset base class.
@@ -156,6 +156,41 @@ class DataLoader:
         self.__current_index = 0
 
 
+class TensorDataset(Dataset):
+    """Tensor dataset.
+    Each sample is a pytree of tensors.
+    """
+
+    def __init__(self, tensors: Any):
+        """Constructor.
+
+        Args:
+            `tensors`: A pytree of tensors. All tensors must have the same size in the first dimension, which is treated as the batch dimension.
+        """
+        
+        super().__init__()
+        
+        tensors_list, _ = tree_util.tree_flatten(tensors)
+        
+        assert len(tensors_list) > 0, "There must be at least one tensor!"
+
+        self.__num_samples = tensors_list[0].shape[0]
+
+        for tensor in tensors_list:
+            assert tensor.shape[0] == self.__num_samples
+
+        self.__tensors = tensors
+
+    def __getitem__(self, index: int):
+        return tree_util.tree_map(lambda tensor: tensor.at[index].get(), self.__tensors)
+
+    def __len__(self):
+        return self.__num_samples
+
+    def get_tensors(self):
+        return tree_util.tree_map(lambda tensor: jnp.copy(tensor), self.__tensors)
+
+
 class Distribution:
     """Distribution base class.
 
@@ -169,42 +204,29 @@ class Distribution:
     def __init__(self):
         pass
 
-    def draw_sample(self, n_samples: int):
+    def draw_samples(self, n_samples: int, key: random.KeyArray=None):
+        """Batch-draw samples.
+
+        Args:
+            n_samples (int): The number of samples to draw.
+            key (random.KeyArray): The random key to use. If None, use self.__random_state and update the state.
+            If not None, random state will NOT be updated.
+
+        Returns:
+            Generated samples. Last dimension is feature dimension.
+            In case samples are pytrees, should return ONE pytree with each leaf being an array, where the first dimension
+            is the batch dimension.
+        """
+        
         pass
-
-
-class PointDistribution(Distribution):
-
-    def __init__(self, n_dims: int,
-                 sampler: Tuple[Callable, Dict] = (
-                     random.uniform,
-                     {'minval': 0, 'maxval': 1}
-                 ),
-                 key: random.KeyArray = random.PRNGKey(0)):
-        
-        super().__init__()
-        
-        self.__n_dims = n_dims
-        self.__sampler_function = sampler[0]
-        self.__sampler_configs = sampler[1]
-        self.__random_state = key
     
-    def draw_sample(self, n_samples: int):
-        self.__random_state, key = random.split(self.__random_state)
+    def generate_dataset(self, n_samples: int, key: random.KeyArray=random.PRNGKey(0)):
+        """Generates a TensorDataset by drawing samples from a distribution.
+
+        Args:
+            n_samples (int): The number of samples to generate.
+            distribution (Distribution): The distribution to sample from. Note that samples must be pytrees.
+            key (random.KeyArray): The random key to use.
+        """
         
-        return self.__sampler_function(key=key, shape=(n_samples, self.__n_dims), **self.__sampler_configs)
-
-
-class Dummy(Dataset):
-
-    def __init__(self, num: int):
-        super().__init__()
-        self.upperbound = num
-
-    def __getitem__(self, index: int):
-        assert -self.upperbound <= index < self.upperbound, "out of bound!"
-        val = self.upperbound + index if index < 0 else index
-        return (val, (val ** 2, (val ** 3,)))
-
-    def __len__(self):
-        return self.upperbound
+        return TensorDataset(self.draw_samples(n_samples, key))

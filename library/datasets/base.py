@@ -156,16 +156,16 @@ class DataLoader:
         self.__current_index = 0
 
 
-# class Dummy(Dataset):
+class Dummy(Dataset):
+    
+    def __init__(self, num: int):
+        super().__init__()
+        self.upperbound = num
 
-#     def __init__(self, num: int):
-#         super().__init__()
-#         self.upperbound = num
+    def __getitem__(self, index: int):
+        assert -self.upperbound <= index < self.upperbound, "out of bound!"
+        val = self.upperbound + index if index < 0 else index
+        return (val, (val ** 2, (val ** 3,)))
 
-#     def __getitem__(self, index: int):
-#         assert -self.upperbound <= index < self.upperbound, "out of bound!"
-#         val = self.upperbound + index if index < 0 else index
-#         return (val, (val ** 2, (val ** 3,)))
-
-#     def __len__(self):
-#         return self.upperbound
+    def __len__(self):
+        return self.upperbound

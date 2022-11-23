@@ -5,7 +5,7 @@ from typing import Callable, Dict
 import optax
 from optax._src.base import GradientTransformation
 from abc import ABC, abstractmethod
-
+import copy
 
 class ModelInstance:
 
@@ -16,6 +16,9 @@ class ModelInstance:
     This class is designed to be constructed ("instantiated") from an
     nn.Module object. It serves as a stateful wrapper, not an ABC
     (Abstract Base Class).
+    
+    This class is NOT designed to be composed. It represents a whole big
+    model, not a component.
     """
 
     def __init__(self, template: nn.Module, batch_name: str = 'batch'):
@@ -129,6 +132,26 @@ class ModelInstance:
         # recompile the model, since the behavior of `apply` may have been modified.
         if self.__variables_initalized:
             self.compile(self.__loss_fn, need_vmap=False)
+        
+    def reset_configs(self, configs: Dict):
+        """Similar to update_configs, but this method completely
+        discards all old configurations.
+        
+        You may want to call this method to remove accidentally
+        added key, value pairs.
+
+        Args:
+            configs (Dict)
+        """
+        
+        self.__run_configs = configs
+    
+    @property
+    def run_configs(self):
+        """Returns A COPY of the configurations.
+        """
+        
+        return copy.deepcopy(self.__run_configs)
 
     def intitialize(self, x: jnp.ndarray, key: random.KeyArray = random.PRNGKey(0)):
         """Initializes the model, inferencing the shapes of all parameters / variables
@@ -170,7 +193,7 @@ class ModelInstance:
             raise Exception('This model is not initialized! Please call "initialize" first.')
         
         if need_vmap:
-            vectorized_loss = jax.vmap(loss_fn, in_axes=0, out_axes=0)
+            vectorized_loss = jax.vmap(loss_fn, in_axes=0, out_axes=0, axis_name=self.__batch_name)
             
             def reduced_vectorized_loss(y_pred: jnp.ndarray, y_true: jnp.ndarray):
                 return reduce_method(vectorized_loss(y_pred, y_true))
@@ -187,9 +210,8 @@ class ModelInstance:
             return reduced_vectorized_loss(y_pred, y_batch), new_state
         
         self.__grad_fn = jax.jit(
-            jax.grad(composed_loss, argnums=0, hax_aux=True))
+            jax.grad(composed_loss, argnums=0, has_aux=True))
     
-    @jax.jit
     def __call__(self, x_batch: jnp.ndarray):
         """Applies the model instance to transform the inputs.
         
@@ -269,6 +291,9 @@ class ModelInstance:
         if self.__grad_fn is None:
             raise Exception('The gradient function is not compiled! Please call "compile" first.')
         
+        if self.__optimizer is None:
+            raise Exception('This model has no optimizer attached to it! Please call "attach_optimizer" first.')
+        
         gradients, new_state = self.__grad_fn(self.__parameters, self.__state, x_batch, y_batch)
 
         # update state variables
@@ -282,3 +307,19 @@ class ModelInstance:
 
         # update parameters
         self.__parameters = optax.apply_updates(self.__parameters, updates)
+    
+    def compute_loss(self, x_batch: jnp.ndarray, y_batch: jnp.ndarray):
+        """Compute the loss.
+        
+        This method does NOT update the parameters, state variables or the optimizer state.
+        
+        Call this method ONLY IF you JUST want to evaluate the loss.
+
+        Args:
+            x_batch (jnp.ndarray)
+            y_batch (jnp.ndarray)
+        """
+        
+        y_pred = self(x_batch)
+        
+        return self.__loss_fn(y_pred, y_batch)

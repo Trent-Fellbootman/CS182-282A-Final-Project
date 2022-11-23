@@ -35,11 +35,14 @@ class ModelInstance:
             the batch name argument passed in to the BatchNorm constructor.
         """
 
-        self.__variables_initalized = False
+        self.__initialized = False
         self.__model_structure = template
         self.__parameters = None
         self.__state = None
         self.__batch_name = batch_name
+
+        # self.__fast_apply is the JIT version of model.apply. The signature is (params, state, x_batch) -> (y_pred, new_state)
+        self.__fast_apply = None
         
         # self.__loss_fn has signature (y_pred_batch, y_true_batch) -> float
         self.__loss_fn = None
@@ -61,7 +64,7 @@ class ModelInstance:
         """Returns A COPY of the parameters and state variables.
         """
 
-        if not self.__variables_initalized:
+        if not self.__initialized:
             raise Exception('This model is not initialized! Please call "initialize" first.')
         
         return tree_util.tree_map(lambda x: jnp.copy(x),
@@ -130,7 +133,7 @@ class ModelInstance:
         self.__run_configs.update(new_configs)
         
         # recompile the model, since the behavior of `apply` may have been modified.
-        if self.__variables_initalized:
+        if self.__initialized:
             self.compile(self.__loss_fn, need_vmap=False)
         
     def reset_configs(self, configs: Dict):
@@ -156,6 +159,8 @@ class ModelInstance:
     def intitialize(self, x: jnp.ndarray, key: random.KeyArray = random.PRNGKey(0)):
         """Initializes the model, inferencing the shapes of all parameters / variables
         and initializing their values.
+        
+        This function also compiles the forward pass.
 
         Args:
             x (jnp.ndarray): The input to use for shape interence.
@@ -165,11 +170,25 @@ class ModelInstance:
         variables = self.__model_structure.init(key, x)
         self.__state, self.__parameters = variables.pop('params')
 
-        self.__variables_initalized = True
+        self.__compile_forward()
+
+        self.__initialized = True
+    
+    def __compile_forward(self):
+        # vectorize and compile the forward pass
+        def apply(params, state, x_batch):
+            y_pred, new_state = self.__model_structure.apply({'params': params, **state},
+                                                             x_batch, **self.__run_configs,
+                                                             mutable=list(state.keys()))
+            return y_pred, new_state
+        
+        self.__fast_apply = jax.jit(
+            jax.vmap(apply, in_axes=(None, None, 0), out_axes=(0, None), axis_name=self.__batch_name)
+        )
 
     def compile(self, loss_fn: Callable, need_vmap: bool=False, reduce_method: Callable=jnp.mean):
-        """Symbolically compiles the gradient computation graph
-        with the loss function.
+        """Symbolically vectorized and compiles the gradient computation graph
+        with the loss function, as well as the forward pass.
 
         If the loss function changes, this method should be re-called.
 
@@ -189,9 +208,13 @@ class ModelInstance:
             argument is DISREGARDED if need_vmap == False.
         """
         
-        if not self.__variables_initalized:
+        if not self.__initialized:
             raise Exception('This model is not initialized! Please call "initialize" first.')
         
+        # vectorize and compile the forward pass
+        self.__compile_forward()
+        
+        # compile the gradient function
         if need_vmap:
             vectorized_loss = jax.vmap(loss_fn, in_axes=0, out_axes=0, axis_name=self.__batch_name)
             
@@ -204,9 +227,10 @@ class ModelInstance:
         self.__loss_fn = reduced_vectorized_loss
 
         def composed_loss(params, state, x_batch, y_batch):
-            y_pred, new_state = self.__model_structure.apply({'params': params, **state},
-                                                             x_batch, **self.__run_configs,
-                                                             mutable=list(state.keys()))
+            # y_pred, new_state = self.__model_structure.apply({'params': params, **state},
+            #                                                  x_batch, **self.__run_configs,
+            #                                                  mutable=list(state.keys()))
+            y_pred, new_state = self.__fast_apply(params, state, x_batch)
             return reduced_vectorized_loss(y_pred, y_batch), new_state
         
         self.__grad_fn = jax.jit(
@@ -228,13 +252,10 @@ class ModelInstance:
         Returns: y_pred (jnp.ndarray): Transformed inputs.
         """
         
-        if not self.__variables_initalized:
+        if not self.__initialized:
             raise Exception('This model is not initialized! Please call "initialize" first.')
         
-        y_pred, new_state = self.__model_structure.apply(
-            {'params': self.__parameters, **self.__state},
-            x_batch, **self.__run_configs,
-            mutable=list(self.__state.keys()))
+        y_pred, new_state = self.__fast_apply(self.__parameters, self.__state, x_batch)
         
         return y_pred
     
@@ -272,7 +293,7 @@ class ModelInstance:
             optimizer (GradientTransformation): The optimizer to attach.
         """
         
-        if not self.__variables_initalized:
+        if not self.__initialized:
             raise Exception('This model is not initialized! Please call "initialize" first.')
         
         self.__optimizer = optimizer

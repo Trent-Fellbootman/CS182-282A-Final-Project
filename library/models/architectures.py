@@ -71,7 +71,7 @@ def test_mlp():
 
 def test_conv():
     from jax import random
-    model = Conv([16], [3], [(2,2)], [(0,0)], False)
+    model = Conv([16], [(3,3)], [(2,2)], [(0,0)], False)
     key1, key2 = random.split(random.PRNGKey(0), 2)
     x = random.uniform(key1, (28, 28, 3))
     print(x.shape)

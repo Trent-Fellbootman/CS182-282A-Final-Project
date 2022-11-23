@@ -39,11 +39,15 @@ class Conv(nn.Module):
     '''
     hidden_sizes: Sequence[int]
     kernel_sizes: Sequence[int]
+    strides: Sequence[int]
+    paddings: Sequence[int]
     apply_batchnorm: bool = False
     
     def setup(self):
         self.layers = [nn.Conv(features=self.hidden_sizes[i], 
-                               kernel_size=self.kernel_sizes[i]) for i in range(len(self.hidden_sizes))]
+        kernel_size=self.kernel_sizes[i],
+        #padding=self.paddings[i],
+        strides=self.strides[i]) for i in range(len(self.hidden_sizes))]
         if self.apply_batchnorm:
             self.batchnorm = nn.BatchNorm()
 
@@ -67,7 +71,7 @@ def test_mlp():
 
 def test_conv():
     from jax import random
-    model = Conv([16], [3])
+    model = Conv([16], [3], [(2,2)], [(0,0)], False)
     key1, key2 = random.split(random.PRNGKey(0), 2)
     x = random.uniform(key1, (28, 28, 3))
     print(x.shape)
@@ -76,4 +80,4 @@ def test_conv():
     print(y.shape)
 
 if __name__ == "__main__":
-    test_mlp()
+    test_conv()

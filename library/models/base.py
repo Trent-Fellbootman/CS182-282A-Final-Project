@@ -350,7 +350,7 @@ class ModelInstance:
         The parameters and optionally the state variables will be updated,
         but optimizer state will NOT.
 
-        The `forward_fn`, `parameters`, `states`, `parameters_`, `states_` properties
+        The `forward_fn`, `parameters`, `state`, `parameters_`, `state_` properties
         and the `manual_step_without_optimizer` and `manual_step_with_optimizer` methods allow you to
         compose custom passes across different ModelInstance objects (for example, this
         can be useful in GAN.).
@@ -366,6 +366,10 @@ class ModelInstance:
             new_state: The optional new values for the state variables.
             If None, the state variables will NOT be updated.
         """
+
+        if not self.__initialized:
+            raise Exception(
+                'This model is not initialized! Please call "initialize" first.')
         
         self.__parameters = optax.apply_updates(self.__parameters, updates)
         
@@ -378,7 +382,7 @@ class ModelInstance:
         
         This method DOES updates the optimizer states.
 
-        The `forward_fn`, `parameters`, `states`, `parameters_`, `states_` properties
+        The `forward_fn`, `parameters`, `state`, `parameters_`, `state_` properties
         and the `manual_step_without_optimizer` and `manual_step_with_optimizer` methods allow you to
         compose custom passes across different ModelInstance objects (for example, this
         can be useful in GAN.).
@@ -390,6 +394,9 @@ class ModelInstance:
             grads (_type_): _description_
             new_state (_type_, optional): _description_. Defaults to None.
         """
+
+        if self.__optimizer is None:
+            raise Exception('This model has no optimizer attached!')
 
         updates, self.__optimizer_state = self.__optimizer.update(grads, self.__optimizer_state, self.__parameters)
         self.__parameters = optax.apply_updates(self.__parameters, updates)
@@ -403,7 +410,7 @@ class ModelInstance:
         
         The signature of the returned function is (params, state, x_batch) -> (y_pred, new_state).
         
-        The `forward_fn`, `parameters`, `states`, `parameters_`, `states_` properties
+        The `forward_fn`, `parameters`, `state`, `parameters_`, `state_` properties
         and the `manual_step_without_optimizer` and `manual_step_with_optimizer` methods allow you to
         compose custom passes across different ModelInstance objects (for example, this
         can be useful in GAN.).
@@ -418,7 +425,7 @@ class ModelInstance:
     def parameters(self):
         """Returns A COPY of the parameters.
 
-        The `forward_fn`, `parameters`, `states`, `parameters_`, `states_` properties
+        The `forward_fn`, `parameters`, `state`, `parameters_`, `state_` properties
         and the `manual_step_without_optimizer` and `manual_step_with_optimizer` methods allow you to
         compose custom passes across different ModelInstance objects (for example, this
         can be useful in GAN.).
@@ -427,10 +434,10 @@ class ModelInstance:
         return tree_util.tree_map(lambda x: jnp.copy(x), self.__parameters)
     
     @property
-    def states(self):
+    def state(self):
         """Returns A COPY of the state variables.
 
-        The `forward_fn`, `parameters`, `states`, `parameters_`, `states_` properties
+        The `forward_fn`, `parameters`, `state`, `parameters_`, `state_` properties
         and the `manual_step_without_optimizer` and `manual_step_with_optimizer` methods allow you to
         compose custom passes across different ModelInstance objects (for example, this
         can be useful in GAN.).
@@ -442,7 +449,7 @@ class ModelInstance:
     def parameters_(self):
         """Returns A REFERENCE to the parameters.
 
-        The `forward_fn`, `parameters`, `states`, `parameters_`, `states_` properties
+        The `forward_fn`, `parameters`, `state`, `parameters_`, `state_` properties
         and the `manual_step_without_optimizer` and `manual_step_with_optimizer` methods allow you to
         compose custom passes across different ModelInstance objects (for example, this
         can be useful in GAN.).
@@ -451,10 +458,10 @@ class ModelInstance:
         return self.__parameters
     
     @property
-    def states_(self):
+    def state_(self):
         """Returns A REFERENCE to the state variables.
 
-        The `forward_fn`, `parameters`, `states`, `parameters_`, `states_` properties
+        The `forward_fn`, `parameters`, `state`, `parameters_`, `state_` properties
         and the `manual_step_without_optimizer` and `manual_step_with_optimizer` methods allow you to
         compose custom passes across different ModelInstance objects (for example, this
         can be useful in GAN.).

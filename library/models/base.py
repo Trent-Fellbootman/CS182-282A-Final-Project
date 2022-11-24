@@ -1,9 +1,9 @@
 from flax import linen as nn, serialization
 import jax
 from jax import numpy as jnp, random, tree_util
-from typing import Callable, Dict
+from typing import Callable, Dict, Any
 import optax
-from optax._src.base import GradientTransformation, Params, Updates
+from optax._src.base import GradientTransformation, Params, Updates, PyTree
 from abc import ABC, abstractmethod
 import copy
 
@@ -55,6 +55,10 @@ class ModelInstance:
         self.__optimizer_state = None
 
         self.__run_configs = {}
+    
+    @property
+    def is_initialized(self):
+        return self.__initialized
 
     @property
     def batch_name(self):
@@ -158,7 +162,7 @@ class ModelInstance:
 
         return copy.deepcopy(self.__run_configs)
 
-    def intitialize(self, x: jnp.ndarray, key: random.KeyArray = random.PRNGKey(0)):
+    def initialize(self, x: jnp.ndarray, key: random.KeyArray = random.PRNGKey(0)):
         """Initializes the model, inferencing the shapes of all parameters / variables
         and initializing their values.
 
@@ -503,10 +507,9 @@ class ModelInstance:
             'optimizer_state': self.__optimizer_state
         }
 
-        state_dict_bytes = serialization.to_bytes(state_dict)
-
         if filepath is not None:
             with open(filepath, 'xb') as f:
+                state_dict_bytes = serialization.to_bytes(state_dict)
                 f.write(state_dict_bytes)
 
         return state_dict
@@ -536,16 +539,100 @@ class ModelInstance:
             'optimizer_state': self.__optimizer_state
         }
 
-        if isinstance(states, Dict):
-            # TODO: optimize.
-            state_dict = serialization.from_bytes(state_dict, serialization.to_bytes(states))
-            
-        elif isinstance(states, str):
+        if isinstance(states, str):
             with open(states, 'rb') as f:
                 state_dict = serialization.from_bytes(state_dict, f.read())
         else:
-            raise Exception(f"Invalid argument type: {type(states)}")
+            # TODO: optimize.
+            state_dict = serialization.from_bytes(state_dict, serialization.to_bytes(states))
         
         self.__parameters = state_dict['variables']['params']
         self.__state = state_dict['variables']['state']
         self.__optimizer_state = state_dict['optimizer_state']
+
+class DifferentiableLearningSystem(ABC):
+    
+    def __init__(self, submodules: PyTree, *args, **kwargs):
+        """Constructor.
+
+        Args:
+            submodules (Pytree): A pytree of ModelInstance objects, representing
+            ALL learnable models.
+        """
+        
+        super().__init__()
+        
+        self.__submodules = submodules
+    
+    @property
+    def submodules(self):
+        """Returns a copy of the submodule hierarchy.
+        """
+        
+        return tree_util.tree_map(lambda x: x, self.__submodules)
+    
+    @abstractmethod
+    def initialize(self, *args, **kwargs):
+        """This method should initialize all submodules (ModelInstance objects).
+        """
+        
+        pass
+    
+    @abstractmethod
+    def train(self, *args, **kwargs):
+        """This method should train the system on a dataset.
+        """
+        
+        pass
+    
+    def save_states(self, filepath: str | None=None):
+        """Save parameters, state variables, optimizer states of all submodules into a pytree and
+        return it. Optionally saves this pytree to disk.
+
+        Args:
+            filepath (str | None, optional): The file path to save the states to. If None,
+            does NOT save to disk.
+            
+        Returns:
+            The state pytree. Note that each leave is the bytes representation of the corresponding
+            submodule.
+        """
+        
+        state_bytes = tree_util.tree_map(
+            lambda instance: serialization.to_bytes(instance.save_states()),
+            self.__submodules)
+
+        if filepath is not None:
+            with open(filepath, 'xb') as f:
+                f.write(serialization.to_bytes(state_bytes))
+        
+        return state_bytes
+    
+    def load_states(self, states: str | PyTree):
+        """Loads all states.
+
+        Args:
+            states (str | PyTree): State dictionary. If str, load state dict from file.
+            If PyTree, each leaf must be the bytes representation of the corresponding
+            submodule.
+        """
+        
+        current_state_bytes = self.save_states()
+        
+        new_state_bytes = None
+
+        if isinstance(states, str):
+            with open(states, 'rb') as f:
+                new_state_bytes = serialization.from_bytes(current_state_bytes, f.read())
+        else:
+            # TODO: optimize.
+            new_state_bytes = serialization.from_bytes(current_state_bytes, serialization.to_bytes(states))
+        
+        def apply_state_dict(submodule: ModelInstance, state_bytes):
+            submodule.load_states(
+                serialization.from_bytes(
+                    submodule.save_states(), state_bytes))
+        
+        tree_util.tree_map(apply_state_dict, self.__submodules, new_state_bytes)
+        
+        

@@ -1,8 +1,9 @@
 from base import DifferentiableLearningSystem, ModelInstance
 from flax import linen as nn
 import jax
-from jax import random, numpy as jnp, tree_util, PyTree
+from jax import random, numpy as jnp, tree_util
 import optax
+from optax._src.base import PyTree
 from architectures import MLP
 from .. import datasets
 from tqdm import tqdm

@@ -493,7 +493,7 @@ class ModelInstance:
 
         return self.__loss_fn(y_pred, y_batch)
 
-    def save_states(self, filepath: str | None = None):
+    def save_states(self, filepath: str = None):
         """Saves all states, including parameters, variables and optimizer state,
         into a dictionary.
 
@@ -514,7 +514,7 @@ class ModelInstance:
 
         return state_dict
 
-    def load_states(self, states: str | Dict):
+    def load_states(self, states: Any):
         """Loads parameters, variables and optimizer state.
         
         This method does not keep you from loading states when you have not
@@ -585,7 +585,7 @@ class DifferentiableLearningSystem(ABC):
         
         pass
     
-    def save_states(self, filepath: str | None=None):
+    def save_states(self, filepath: str=None):
         """Save parameters, state variables, optimizer states of all submodules into a pytree and
         return it. Optionally saves this pytree to disk.
 
@@ -608,7 +608,7 @@ class DifferentiableLearningSystem(ABC):
         
         return state_bytes
     
-    def load_states(self, states: str | PyTree):
+    def load_states(self, states: Any):
         """Loads all states.
 
         Args:

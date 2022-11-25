@@ -105,7 +105,7 @@ class DataLoader:
             *self.__samples[index: index + self.__batch_size])
             for index in start_indices]
 
-    def reshuffle(self, key: random.KeyArray | None = None):
+    def reshuffle(self, key: random.KeyArray = None):
         """Reshuffles and re-batches the data loader IN PLACE.
 
         Batches are regenerated.

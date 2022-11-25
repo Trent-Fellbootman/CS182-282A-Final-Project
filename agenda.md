@@ -1,3 +1,4 @@
 - Sunday afternoon, meet: DONE
 - Tue, Nov 22, 4-5pm: DONE
-- Fri, Nov 25, 9A.M.
+- Fri, Nov 25, 9A.M.: DONE
+- Sun, Nov 27, 2pm: DONE

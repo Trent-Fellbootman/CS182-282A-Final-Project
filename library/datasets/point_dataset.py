@@ -3,7 +3,7 @@ from .utils import TensorDataset, PolynomialTransformation, PointDistribution
 
 from typing import List, Tuple, Callable
 import jax
-from jax import numpy as jnp, random
+from jax import numpy as jnp, random, tree_util
 
 import plotly.express as px
 from plotly import subplots, graph_objects as go
@@ -196,6 +196,9 @@ class PointPairDataset(Dataset):
 
     def __len__(self):
         return self.__latent_points.shape[0]
+    
+    def get_all_point_pairs(self):
+        return tree_util.tree_map(lambda x: jnp.copy(x), (self.__points_A, self.__points_B))
 
     def create_visualization(self):
         """Creates a visualization of this dataset.

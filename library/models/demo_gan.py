@@ -38,7 +38,7 @@ class SimpleGANWithMLP(DifferentiableLearningSystem):
         self.__latent_dim = latent_dim
 
         self.__generator.initialize(jnp.ones((2, latent_dim)))
-        self.__discriminator.initialize(jnp.ones(2, self.__ambient_dim))
+        self.__discriminator.initialize(jnp.ones((2, self.__ambient_dim)))
 
         self.__discriminator.compile(optax.sigmoid_binary_cross_entropy,
                                      need_vmap=True)

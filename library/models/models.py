@@ -1,5 +1,5 @@
 from flax import linen as nn
-from architectures import *
+from .architectures import *
 import optax
 
 

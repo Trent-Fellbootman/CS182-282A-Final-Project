@@ -1,9 +1,9 @@
+from .base import Dataset, Distribution
+from .utils import TensorDataset, PolynomialTransformation, PointDistribution
+
 from typing import List, Tuple, Callable
 import jax
 from jax import numpy as jnp, random
-
-from base import Dataset, Distribution
-from utils import TensorDataset, PolynomialTransformation, PointDistribution
 
 import plotly.express as px
 from plotly import subplots, graph_objects as go

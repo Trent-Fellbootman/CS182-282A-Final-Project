@@ -1,6 +1,7 @@
+from .base import Dataset, Distribution, TensorDataset
+
 from jax import numpy as jnp, random
 from typing import List, Tuple, Callable, Dict, Any
-from base import Dataset, Distribution, TensorDataset
 from jax import tree_util
 
 

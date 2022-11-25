@@ -1,3 +1,1 @@
-import base
-import point_dataset
-import utils
+from . import base, image_dataset, point_dataset, utils

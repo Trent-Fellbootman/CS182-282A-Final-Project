@@ -188,6 +188,11 @@ class TensorDataset(Dataset):
         return self.__num_samples
 
     def get_tensors(self):
+        """Get the underlying tensors of this dataset.
+
+        Returns:
+            The tensors structured in a PyTree.
+        """
         return tree_util.tree_map(lambda tensor: jnp.copy(tensor), self.__tensors)
 
 

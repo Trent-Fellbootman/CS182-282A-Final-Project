@@ -99,9 +99,6 @@ class CycleGAN(DifferentiableLearningSystem):
             dB_loss = self.__discriminator_B.compute_loss(dB_dataset, dB_labels)
 
             ## Update Generators
-            # Calculate GAN loss: Adversarial Loss
-
-            # Cycle loss: Cycle Consistency Loss
             (loss_genAB, new_state_genAB), gradsAB = gradient_fn_gen_AB(
                 self.__generator_AB.parameters_,
                 self.__generator_AB.state_,

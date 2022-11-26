@@ -1,1 +1,1 @@
-from . import base, architectures
+from . import base, architectures, cyclegan

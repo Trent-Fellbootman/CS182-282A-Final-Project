@@ -11,7 +11,7 @@ from typing import Tuple
 
 class CycleGAN(DifferentiableLearningSystem):
 
-    def __init__(self, generator: nn.Module, discriminator: nn.Module, data_shape: Tuple):
+    def __init__(self, generator: nn.Module, discriminator: nn.Module, data_shape_A: Tuple, data_shape_B: Tuple):
         generator_AB = ModelInstance(generator)
         generator_BA = ModelInstance(generator)
 
@@ -20,7 +20,8 @@ class CycleGAN(DifferentiableLearningSystem):
 
         super().__init__((generator_AB, generator_BA, discriminator_A, discriminator_B))
 
-        self.__data_shape = data_shape
+        self.__data_shape_A = data_shape_A
+        self.__data_shape_B = data_shape_B
 
         self.__generator_AB = generator_AB
         self.__generator_BA = generator_BA
@@ -28,10 +29,10 @@ class CycleGAN(DifferentiableLearningSystem):
         self.__discriminator_B = discriminator_B
 
     def initialize(self):
-        self.__generator_AB.initialize(jnp.ones(self.__data_shape))
-        self.__generator_BA.initialize(jnp.ones(self.__data_shape))
-        self.__discriminator_A.initialize(jnp.ones(self.__data_shape))
-        self.__discriminator_B.initialize(jnp.ones(self.__data_shape))
+        self.__generator_AB.initialize(jnp.ones(self.__data_shape_A))
+        self.__generator_BA.initialize(jnp.ones(self.__data_shape_B))
+        self.__discriminator_A.initialize(jnp.ones(self.__data_shape_A))
+        self.__discriminator_B.initialize(jnp.ones(self.__data_shape_B))
 
         self.__discriminator_A.compile(optax.sigmoid_binary_cross_entropy, need_vmap=True)
         self.__discriminator_B.compile(optax.sigmoid_binary_cross_entropy, need_vmap=True)
@@ -39,21 +40,21 @@ class CycleGAN(DifferentiableLearningSystem):
     def train(self, dataset_A: datasets.base.TensorDataset,
               dataset_B: datasets.base.TensorDataset,
               num_epochs: int = 10,
-              learning_rate: float = 1e-3,
+              optimizer: optax.GradientTransformation = optax.sgd(learning_rate=1e-3),
               key: random.KeyArray = random.PRNGKey(0)):
 
         self.__discriminator_A.attach_optimizer(
-            optax.sgd(learning_rate=learning_rate))
+            optimizer)
 
         self.__discriminator_B.attach_optimizer(
-            optax.sgd(learning_rate=learning_rate))
+            optimizer)
         
         self.__generator_AB.attach_optimizer(
-            optax.sgd(learning_rate=learning_rate)
+            optimizer
         )
 
         self.__generator_BA.attach_optimizer(
-            optax.sgd(learning_rate=learning_rate)
+            optimizer
         )
 
         forward_fn_gen_AB = self.__generator_AB.forward_fn
@@ -63,6 +64,7 @@ class CycleGAN(DifferentiableLearningSystem):
 
         real_A = dataset_A
         real_B = dataset_B
+        assert len(dataset_A) == len(dataset_B)
         num_examples = len(dataset_A)
 
         @jax.jit

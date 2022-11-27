@@ -71,11 +71,13 @@ class CycleGAN(DifferentiableLearningSystem):
         # return the discriminator scores and the new state of the generator
         def forward_fn_AB(params_gen, state_gen, params_dis, state_dis, data):
             fake, new_state_gen = forward_fn_gen_AB(params_gen, state_gen, data)
-            return -jnp.mean(forward_fn_dis_B(params_dis, state_dis, fake)[0]), new_state_gen
+            recov, new_new_state_gen = forward_fn_gen_BA(params_gen, new_state_gen, fake)
+            return -jnp.mean(forward_fn_dis_B(params_dis, state_dis, fake)[0]), jnp.sum(jnp.abs(data-recov)), new_new_state_gen
 
         def forward_fn_BA(params_gen, state_gen, params_dis, state_dis, data):
             fake, new_state_gen = forward_fn_gen_BA(params_gen, state_gen, data)
-            return -jnp.mean(forward_fn_dis_A(params_dis, state_dis, fake)[0]), new_state_gen
+            recov, new_new_state_gen = forward_fn_gen_AB(params_gen, new_state_gen, fake)
+            return -jnp.mean(forward_fn_dis_A(params_dis, state_dis, fake)[0]), jnp.sum(jnp.abs(data-recov)), new_new_state_gen
 
         gradient_fn_gen_AB = jax.jit(jax.value_and_grad(forward_fn_AB, has_aux=True))
         gradient_fn_gen_BA = jax.jit(jax.value_and_grad(forward_fn_BA, has_aux=True))
@@ -101,14 +103,14 @@ class CycleGAN(DifferentiableLearningSystem):
             dB_loss = self.__discriminator_B.compute_loss(dB_dataset, dB_labels)
 
             ## Update Generators
-            (loss_genAB, new_state_genAB), gradsAB = gradient_fn_gen_AB(
+            (ganloss_genAB, new_state_genAB), gradsAB = gradient_fn_gen_AB(
                 self.__generator_AB.parameters_,
                 self.__generator_AB.state_,
                 self.__discriminator_B.parameters_,
                 self.__discriminator_B.state_,
                 real_A)
             
-            (loss_genBA, new_state_genBA), gradsBA = gradient_fn_gen_BA(
+            (ganloss_genBA, new_state_genBA), gradsBA = gradient_fn_gen_BA(
                 self.__generator_BA.parameters_,
                 self.__generator_BA.state_,
                 self.__discriminator_A.parameters_,
@@ -119,7 +121,7 @@ class CycleGAN(DifferentiableLearningSystem):
             self.__generator_BA.manual_step_with_optimizer(gradsBA, new_state_genBA)
 
             
-            iterations.set_description(f'iteration {i}; gen_loss: {loss_genAB+loss_genBA}; dis_loss: {dA_loss+dB_loss}')
+            iterations.set_description(f'iteration {i}; gen_loss: {ganloss_genAB+ganloss_genBA}; dis_loss: {dA_loss+dB_loss}')
 
 
     def combine_datasets(self, data_a, data_b, label_a: jnp.array, label_b: jnp.array, key: random.KeyArray = None):

@@ -492,6 +492,13 @@ class ModelInstance:
         y_pred = self(x_batch)
 
         return self.__loss_fn(y_pred, y_batch)
+    
+    def __str__(self):
+        architecture_lines = str(self.__model_structure).split('\n')
+        ret_lines = ['Model Structure:']
+        ret_lines += ['\t' + line for line in architecture_lines]
+        
+        return '\n'.join(ret_lines)
 
     def save_states(self, filepath: str = None):
         """Saves all states, including parameters, variables and optimizer state,

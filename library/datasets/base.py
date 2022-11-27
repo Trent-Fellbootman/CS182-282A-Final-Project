@@ -87,6 +87,10 @@ class DataLoader:
         # to be filled
         self.__batches = []
         self.reshuffle()
+    
+    @property
+    def num_batches(self):
+        return self.__max_index + 1
 
     @property
     def batch_size(self):

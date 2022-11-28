@@ -4,6 +4,7 @@ from jax import random, numpy as jnp, tree_util
 import optax
 from typing import Tuple
 from tqdm import tqdm
+from math import sqrt
 
 from .. import datasets
 from .base import DifferentiableLearningSystem, ModelInstance
@@ -113,8 +114,39 @@ class VanillaGAN(DifferentiableLearningSystem):
                 self.__generator.manual_step_with_optimizer(
                     grads, new_state_gen)
 
-                batches.set_description(
-                    f'iteration {i}; gen_loss: {loss_gen}; dis_loss: {self.__discriminator.compute_loss(combined_batch, combined_labels)}')
+                if i % print_every == 0:
+                    dis_loss = self.__discriminator.compute_loss(combined_batch, combined_labels)
+                    gen_grads = grads
+                    dis_grads = self.__discriminator.eval_gradients(combined_batch, combined_labels)
+                    
+                    total_gen_elements = 0
+                    total_gen_norm_squared = 0
+                    
+                    def add_gen_elements(x: jnp.ndarray):
+                        nonlocal total_gen_elements
+                        total_gen_elements += jnp.size(x)
+                    def add_gen_norm(x: jnp.ndarray):
+                        nonlocal total_gen_norm_squared
+                        total_gen_norm_squared += jnp.linalg.norm(x) ** 2
+                        
+                    tree_util.tree_map(add_gen_elements, gen_grads)
+                    tree_util.tree_map(add_gen_norm, gen_grads)
+                        
+                    total_dis_elements = 0
+                    total_dis_norm_squared = 0
+                    
+                    def add_dis_elements(x: jnp.ndarray):
+                        nonlocal total_dis_elements
+                        total_dis_elements += jnp.size(x)
+                    def add_dis_norm(x: jnp.ndarray):
+                        nonlocal total_dis_norm_squared
+                        total_dis_norm_squared += jnp.linalg.norm(x) ** 2
+                    
+                    tree_util.tree_map(add_dis_elements, dis_grads)
+                    tree_util.tree_map(add_dis_norm, dis_grads)
+                    
+                    batches.set_description(
+                        f'iteration {i}; gen_loss: {loss_gen}; dis_loss: {dis_loss}; gen_grads_magnitude: {sqrt(total_gen_norm_squared / total_gen_elements)}; dis_grads_magnitude: {sqrt(total_dis_norm_squared / total_dis_elements)}')
 
             # epochs.set_description(f'iteration {epoch}; gen_loss: {loss_gen}; dis_loss: {d_loss}')
 
@@ -123,14 +155,14 @@ class VanillaGAN(DifferentiableLearningSystem):
         combined_examples = jnp.concatenate([data_a, data_b], axis=0)
         labels = jnp.concatenate([label_a, label_b], axis=0)
 
-        permutation = random.permutation(
-            key, jnp.array(range(len(combined_examples))))
+        # permutation = random.permutation(
+        #     key, jnp.array(range(len(combined_examples))))
 
-        combined_examples = jnp.array(
-            [combined_examples[index] for index in permutation])
-        labels = jnp.array([labels[index] for index in permutation])
+        # combined_examples = jnp.array(
+        #     [combined_examples[index] for index in permutation])
+        # labels = jnp.array([labels[index] for index in permutation])
 
-        return combined_examples, labels
+        return random.permutation(key, combined_examples, axis=0), random.permutation(key, labels, axis=0)
 
     def create_distribution(self):
         """When sampling from the returned distribution, ALWAYS use standard normal

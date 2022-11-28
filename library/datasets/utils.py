@@ -242,3 +242,27 @@ class Dummy(Dataset):
 
     def __len__(self):
         return self.upperbound
+
+def make_blobs(n_samples: int=100,
+                n_clusters: int=2,
+                n_dim: int=2,
+                cluster_pos_sigma: float=1,
+                min_sigma: float=0,
+                max_sigma: float=1,
+                key: random.KeyArray=random.PRNGKey(0)):
+    key, new_key1, new_key2 = random.split(key, num=3)
+    samples_per_cluster = n_samples // n_clusters
+    centers = random.multivariate_normal(new_key1, jnp.zeros((n_dim,)), jnp.eye(n_dim) * cluster_pos_sigma ** 2, (n_clusters,))
+    stds = random.uniform(new_key2, (n_clusters,), minval=min_sigma, maxval=max_sigma)
+    
+    result = jnp.empty((samples_per_cluster * n_clusters, n_dim))
+    
+    new_keys = random.split(key, num=n_clusters)
+    
+    for i, (center, std, new_key) in enumerate(zip(centers, stds, new_keys)):
+        result = result.\
+            at[i * samples_per_cluster:(i + 1) * samples_per_cluster].\
+                set(random.multivariate_normal(new_key, center, jnp.eye(n_dim) * std ** 2, (samples_per_cluster,)))
+    
+    return TensorDataset(result)
+    

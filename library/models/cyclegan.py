@@ -71,11 +71,23 @@ class CycleGAN(DifferentiableLearningSystem):
             recov = self.__generator_AB(fake)
             return -jnp.mean(jnp.log(nn.sigmoid(forward_fn_dis_A(params_dis, state_dis, fake)[0]))) + jnp.sum(jnp.abs(data-recov)), new_state_gen
 
+        #@jax.jit
+        #def generator_loss_fn(data_A, data_B):
+        #    fake_B, fake_state_genAB = forward_fn_gen_AB(self.__generator_AB.parameters_, self.__generator_AB.state_, data_A)
+        #    fake_A, fake_state_genBA = forward_fn_gen_BA(self.__generator_BA.parameters_, self.__generator_BA.state_, data_B)
+        #    # TODO: Unsure whether BA and AB states should be reversed below
+        #    recov_A, recov_state_genBA = forward_fn_gen_BA(self.__generator_BA.parameters_, fake_state_genBA, fake_B)
+        #    recov_B, recov_state_genAB = forward_fn_gen_AB(self.__generator_AB.parameters_, fake_state_genAB, fake_A)
+        #    gan_loss = -(jnp.mean(jnp.log(nn.sigmoid(self.discriminator_A(fake_A)))) + jnp.mean(jnp.log(nn.sigmoid(self.discriminator_B(fake_B)))))
+        #    cycle_loss = jnp.mean(jnp.sum(jnp.abs(data_A-recov_A), axis=-1)) + jnp.mean(jnp.sum(jnp.abs(data_B-recov_B), axis=-1))
+        #    return gan_loss - cycle_loss, recov_state_genBA, recov_state_genAB
+
         gradient_fn_gen_AB = jax.jit(jax.value_and_grad(generatorAB_loss_fn, has_aux=True))
         gradient_fn_gen_BA = jax.jit(jax.value_and_grad(generatorBA_loss_fn, has_aux=True))
         
         epochs = tqdm(range(num_epochs))
-
+        generator_loss = []
+        discriminator_loss = []
         key, new_key = random.split(key)
         dataset = datasets.base.TensorDataset([dataset_A, dataset_B])
         dataloader = datasets.base.DataLoader(dataset, batch_size, new_key, auto_reshuffle=True)
@@ -158,6 +170,9 @@ class CycleGAN(DifferentiableLearningSystem):
 
                     batches.set_description(
                         f'iteration {i}; gen_loss: {loss_gen: .2e}; dis_loss: {loss_dis: .2e};')
+                    generator_loss.append(loss_gen)
+                    discriminator_loss.append(loss_dis)
+        return generator_loss, discriminator_loss
 
 
 

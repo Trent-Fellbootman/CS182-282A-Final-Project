@@ -7,11 +7,15 @@ from optax._src.base import PyTree
 from .. import datasets
 from tqdm import tqdm
 from typing import Tuple
+from math import sqrt
 
 
 class CycleGAN(DifferentiableLearningSystem):
 
     def __init__(self, generator: nn.Module, discriminator: nn.Module, data_shape_A: Tuple, data_shape_B: Tuple):
+        """
+        Data shapes are ambient dimensions excluding batch size
+        """
         generator_AB = ModelInstance(generator)
         generator_BA = ModelInstance(generator)
 
@@ -28,125 +32,177 @@ class CycleGAN(DifferentiableLearningSystem):
         self.__discriminator_A = discriminator_A
         self.__discriminator_B = discriminator_B
 
-    def initialize(self):
-        self.__generator_AB.initialize(jnp.ones(self.__data_shape_A))
-        self.__generator_BA.initialize(jnp.ones(self.__data_shape_B))
-        self.__discriminator_A.initialize(jnp.ones(self.__data_shape_A))
-        self.__discriminator_B.initialize(jnp.ones(self.__data_shape_B))
+    def initialize(self, loss_fn):
+        self.__generator_AB.initialize(jnp.ones((1, *self.__data_shape_A)))
+        self.__generator_BA.initialize(jnp.ones((1, *self.__data_shape_B)))
+        self.__discriminator_A.initialize(jnp.ones((1, *self.__data_shape_A)))
+        self.__discriminator_B.initialize(jnp.ones((1, *self.__data_shape_B)))
 
-        self.__discriminator_A.compile(optax.sigmoid_binary_cross_entropy, need_vmap=True)
-        self.__discriminator_B.compile(optax.sigmoid_binary_cross_entropy, need_vmap=True)
+        self.__discriminator_A.compile(loss_fn, need_vmap=True)
+        self.__discriminator_B.compile(loss_fn, need_vmap=True)
 
     def train(self, dataset_A: datasets.base.TensorDataset,
               dataset_B: datasets.base.TensorDataset,
+              optimizer: optax.GradientTransformation = optax.adam(learning_rate=1e-3),
+              batch_size: int = 32,
               num_epochs: int = 10,
-              optimizer: optax.GradientTransformation = optax.sgd(learning_rate=1e-3),
-              key: random.KeyArray = random.PRNGKey(0)):
+              key: random.KeyArray = random.PRNGKey(0),
+              print_every: int = 10):
 
-        self.__discriminator_A.attach_optimizer(
-            optimizer)
-
-        self.__discriminator_B.attach_optimizer(
-            optimizer)
-        
-        self.__generator_AB.attach_optimizer(
-            optimizer
-        )
-
-        self.__generator_BA.attach_optimizer(
-            optimizer
-        )
+        self.__discriminator_A.attach_optimizer(optimizer)
+        self.__discriminator_B.attach_optimizer(optimizer)
+        self.__generator_AB.attach_optimizer(optimizer)
+        self.__generator_BA.attach_optimizer(optimizer)
 
         forward_fn_gen_AB = self.__generator_AB.forward_fn
         forward_fn_gen_BA = self.__generator_BA.forward_fn
         forward_fn_dis_A = self.__discriminator_A.forward_fn
         forward_fn_dis_B = self.__discriminator_B.forward_fn
 
-        real_A = dataset_A
-        real_B = dataset_B
-        assert len(dataset_A) == len(dataset_B)
-        num_examples = len(dataset_A)
+        @jax.jit
+        def generatorAB_loss_fn(params_gen, state_gen, params_dis, state_dis, data):
+            fake, new_state_gen = forward_fn_gen_AB(params_gen, state_gen, data)
+            recov = self.__generator_BA(fake)
+            return -jnp.mean(jnp.log(nn.sigmoid(forward_fn_dis_B(params_dis, state_dis, fake)[0]))) + jnp.sum(jnp.abs(data-recov)), new_state_gen
 
         @jax.jit
-        # return the discriminator scores and the new state of the generator
-        def forward_fn_AB(params_gen, state_gen, params_dis, state_dis, data):
-            fake, new_state_gen = forward_fn_gen_AB(params_gen, state_gen, data)
-            recov, new_new_state_gen = forward_fn_gen_BA(params_gen, new_state_gen, fake)
-            return -jnp.mean(forward_fn_dis_B(params_dis, state_dis, fake)[0]), jnp.sum(jnp.abs(data-recov)), new_new_state_gen
-
-        def forward_fn_BA(params_gen, state_gen, params_dis, state_dis, data):
+        def generatorBA_loss_fn(params_gen, state_gen, params_dis, state_dis, data):
             fake, new_state_gen = forward_fn_gen_BA(params_gen, state_gen, data)
-            recov, new_new_state_gen = forward_fn_gen_AB(params_gen, new_state_gen, fake)
-            return -jnp.mean(forward_fn_dis_A(params_dis, state_dis, fake)[0]), jnp.sum(jnp.abs(data-recov)), new_new_state_gen
+            recov = self.__generator_AB(fake)
+            return -jnp.mean(jnp.log(nn.sigmoid(forward_fn_dis_A(params_dis, state_dis, fake)[0]))) + jnp.sum(jnp.abs(data-recov)), new_state_gen
 
-        gradient_fn_gen_AB = jax.jit(jax.value_and_grad(forward_fn_AB, has_aux=True))
-        gradient_fn_gen_BA = jax.jit(jax.value_and_grad(forward_fn_BA, has_aux=True))
+        gradient_fn_gen_AB = jax.jit(jax.value_and_grad(generatorAB_loss_fn, has_aux=True))
+        gradient_fn_gen_BA = jax.jit(jax.value_and_grad(generatorBA_loss_fn, has_aux=True))
         
-        iterations = tqdm(range(num_epochs))
-        for i in iterations:
+        epochs = tqdm(range(num_epochs))
 
-            key, new_key, new_key2 = random.split(key, 3)
-            
-            # Fake samples from generators
-            fake_A = self.__generator_BA(real_B)
-            fake_B = self.__generator_AB(real_A)
-            labels_real = jnp.ones((num_examples,))
-            labels_fake = jnp.zeros((num_examples,))
+        key, new_key = random.split(key)
+        dataset = datasets.base.TensorDataset([dataset_A, dataset_B])
+        dataloader = datasets.base.DataLoader(dataset, batch_size, new_key, auto_reshuffle=True)
 
-            ## Update discriminators
-            dA_dataset, dA_labels = self.combine_datasets(real_A, fake_A, labels_real, labels_fake, new_key)
-            self.__discriminator_A.step(dA_dataset, dA_labels)
-            dA_loss = self.__discriminator_A.compute_loss(dA_dataset, dA_labels)
-            
-            dB_dataset, dB_labels = self.combine_datasets(real_B, fake_B, labels_real, labels_fake, new_key2)
-            self.__discriminator_B.step(dB_dataset, dB_labels)
-            dB_loss = self.__discriminator_B.compute_loss(dB_dataset, dB_labels)
+        for epoch in epochs:
+            batches = tqdm(dataloader)
+            for i, (batch_a, batch_b) in enumerate(batches):
 
-            ## Update Generators
-            (ganloss_genAB, new_state_genAB), gradsAB = gradient_fn_gen_AB(
-                self.__generator_AB.parameters_,
-                self.__generator_AB.state_,
-                self.__discriminator_B.parameters_,
-                self.__discriminator_B.state_,
-                real_A)
-            
-            (ganloss_genBA, new_state_genBA), gradsBA = gradient_fn_gen_BA(
-                self.__generator_BA.parameters_,
-                self.__generator_BA.state_,
-                self.__discriminator_A.parameters_,
-                self.__discriminator_A.state_,
-                real_B)
-            
-            self.__generator_AB.manual_step_with_optimizer(gradsAB, new_state_genAB)
-            self.__generator_BA.manual_step_with_optimizer(gradsBA, new_state_genBA)
+                key, new_key, new_key2 = random.split(key, 3)
+                
+                real_A = batch_a
+                real_B = batch_b
 
-            
-            iterations.set_description(f'iteration {i}; gen_loss: {ganloss_genAB+ganloss_genBA}; dis_loss: {dA_loss+dB_loss}')
+                # Fake samples from generators
+                fake_A = self.__generator_BA(real_B)
+                fake_B = self.__generator_AB(real_A)
+                labels_real = jnp.ones((batch_size,))
+                labels_fake = jnp.zeros((batch_size,))
+
+                ## Update discriminators
+                dA_batch, dA_labels = self.combine_batches(real_A, fake_A, labels_real, labels_fake, new_key)
+                self.__discriminator_A.step(dA_batch, dA_labels)
+                
+                dB_batch, dB_labels = self.combine_batches(real_B, fake_B, labels_real, labels_fake, new_key2)
+                self.__discriminator_B.step(dB_batch, dB_labels)
+
+                ## Update Generators
+                (loss_genAB, new_state_genAB), gradsAB = gradient_fn_gen_AB(
+                    self.__generator_AB.parameters_,
+                    self.__generator_AB.state_,
+                    self.__discriminator_B.parameters_,
+                    self.__discriminator_B.state_,
+                    real_A)
+                
+                (loss_genBA, new_state_genBA), gradsBA = gradient_fn_gen_BA(
+                    self.__generator_BA.parameters_,
+                    self.__generator_BA.state_,
+                    self.__discriminator_A.parameters_,
+                    self.__discriminator_A.state_,
+                    real_B)
+                
+                self.__generator_AB.manual_step_with_optimizer(gradsAB, new_state_genAB)
+                self.__generator_BA.manual_step_with_optimizer(gradsBA, new_state_genBA)
+
+                if i % print_every == 0:
+                    dA_loss = self.__discriminator_A.compute_loss(dA_batch, dA_labels)
+                    dB_loss = self.__discriminator_B.compute_loss(dB_batch, dB_labels)
+                    #dis_grads = self.__discriminator_A.eval_gradients(dA_batch, dA_labels) + self.__discriminator_B.eval_gradients(dB_batch, dB_labels)
+                    loss_dis = dA_loss + dB_loss
+                    loss_gen = loss_genAB + loss_genBA
+                    #gen_grads = gradsAB + gradsBA
+
+                    total_gen_elements = 0
+                    total_gen_norm_squared = 0
+
+                    def add_gen_elements(x: jnp.ndarray):
+                        nonlocal total_gen_elements
+                        total_gen_elements += jnp.size(x)
+
+                    def add_gen_norm(x: jnp.ndarray):
+                        nonlocal total_gen_norm_squared
+                        total_gen_norm_squared += jnp.linalg.norm(x) ** 2
+
+                    #tree_util.tree_map(add_gen_elements, gen_grads)
+                    #tree_util.tree_map(add_gen_norm, gen_grads)
+
+                    total_dis_elements = 0
+                    total_dis_norm_squared = 0
+
+                    def add_dis_elements(x: jnp.ndarray):
+                        nonlocal total_dis_elements
+                        total_dis_elements += jnp.size(x)
+
+                    def add_dis_norm(x: jnp.ndarray):
+                        nonlocal total_dis_norm_squared
+                        total_dis_norm_squared += jnp.linalg.norm(x) ** 2
+
+                    #tree_util.tree_map(add_dis_elements, dis_grads)
+                    #tree_util.tree_map(add_dis_norm, dis_grads)
+
+                    batches.set_description(
+                        f'iteration {i}; gen_loss: {loss_gen: .2e}; dis_loss: {loss_dis: .2e};')
 
 
-    def combine_datasets(self, data_a, data_b, label_a: jnp.array, label_b: jnp.array, key: random.KeyArray = None):
-       
+
+    def combine_batches(self, data_a, data_b, label_a: jnp.array, label_b: jnp.array, key: random.KeyArray = None): 
         combined_examples = jnp.concatenate([data_a, data_b], axis=0)
         labels = jnp.concatenate([label_a, label_b], axis=0)
-
-        permutation = random.permutation(key, jnp.array(range(len(combined_examples))))
-
-        combined_examples = jnp.array([combined_examples[index] for index in permutation])
-        labels = jnp.array([labels[index] for index in permutation])
-
         return combined_examples, labels
 
-
-    
     def create_distribution(self):
-        return GANDistribution(self.__generator_AB)
+        """When sampling from the returned distribution, ALWAYS use standard normal
+
+        Returns:
+            _type_: _description_
+        """
+
+        return GANDistribution(self.__generator_AB), GANDistribution(self.__generator_BA)
+
+    def __str__(self):
+        generator_str = str(self.__generator)
+        discriminator_str = str(self.__discriminator)
+        gen_lines = generator_str.split('\n')
+        dis_lines = discriminator_str.split('\n')
+
+        ret_lines = ['generator:']
+        ret_lines += ['\t' + line for line in gen_lines]
+        ret_lines.append('discriminator:')
+        ret_lines += ['\t' + line for line in dis_lines]
+
+        return '\n'.join(ret_lines)
+
 
 class GANDistribution(datasets.base.Distribution):
-    
+
     def __init__(self, generator: ModelInstance):
         super().__init__()
-        
+
         self.__generator = generator
-    
+
     def draw_samples(self, samples: jnp.array):
+        """_summary_
+
+        Args:
+            samples (jnp.array): The input data to use
+
+        Returns:
+            _type_: _description_
+        """
         return self.__generator(samples)

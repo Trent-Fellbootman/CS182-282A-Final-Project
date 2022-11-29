@@ -59,32 +59,36 @@ class CycleGAN(DifferentiableLearningSystem):
         forward_fn_dis_A = self.__discriminator_A.forward_fn
         forward_fn_dis_B = self.__discriminator_B.forward_fn
 
-        @jax.jit
-        def generatorAB_loss_fn(params_gen, state_gen, params_dis, state_dis, data):
-            fake, new_state_gen = forward_fn_gen_AB(params_gen, state_gen, data)
-            recov = self.__generator_BA(fake)
-            return -jnp.mean(jnp.log(nn.sigmoid(forward_fn_dis_B(params_dis, state_dis, fake)[0]))) + jnp.sum(jnp.abs(data-recov)), new_state_gen
-
-        @jax.jit
-        def generatorBA_loss_fn(params_gen, state_gen, params_dis, state_dis, data):
-            fake, new_state_gen = forward_fn_gen_BA(params_gen, state_gen, data)
-            recov = self.__generator_AB(fake)
-            return -jnp.mean(jnp.log(nn.sigmoid(forward_fn_dis_A(params_dis, state_dis, fake)[0]))) + jnp.sum(jnp.abs(data-recov)), new_state_gen
+        #@jax.jit
+        #def generatorAB_loss_fn(params_gen, state_gen, params_dis, state_dis, data):
+        #    fake, new_state_gen = forward_fn_gen_AB(params_gen, state_gen, data)
+        #    recov = self.__generator_BA(fake)
+        #    return -jnp.mean(jnp.log(nn.sigmoid(forward_fn_dis_B(params_dis, state_dis, fake)[0]))) + jnp.sum(jnp.abs(data-recov)), new_state_gen
 
         #@jax.jit
-        #def generator_loss_fn(data_A, data_B):
-        #    fake_B, fake_state_genAB = forward_fn_gen_AB(self.__generator_AB.parameters_, self.__generator_AB.state_, data_A)
-        #    fake_A, fake_state_genBA = forward_fn_gen_BA(self.__generator_BA.parameters_, self.__generator_BA.state_, data_B)
-        #    # TODO: Unsure whether BA and AB states should be reversed below
-        #    recov_A, recov_state_genBA = forward_fn_gen_BA(self.__generator_BA.parameters_, fake_state_genBA, fake_B)
-        #    recov_B, recov_state_genAB = forward_fn_gen_AB(self.__generator_AB.parameters_, fake_state_genAB, fake_A)
-        #    gan_loss = -(jnp.mean(jnp.log(nn.sigmoid(self.discriminator_A(fake_A)))) + jnp.mean(jnp.log(nn.sigmoid(self.discriminator_B(fake_B)))))
-        #    cycle_loss = jnp.mean(jnp.sum(jnp.abs(data_A-recov_A), axis=-1)) + jnp.mean(jnp.sum(jnp.abs(data_B-recov_B), axis=-1))
-        #    return gan_loss - cycle_loss, recov_state_genBA, recov_state_genAB
+        #def generatorBA_loss_fn(params_gen, state_gen, params_dis, state_dis, data):
+        #    fake, new_state_gen = forward_fn_gen_BA(params_gen, state_gen, data)
+        #    recov = self.__generator_AB(fake)
+        #    return -jnp.mean(jnp.log(nn.sigmoid(forward_fn_dis_A(params_dis, state_dis, fake)[0]))) + jnp.sum(jnp.abs(data-recov)), new_state_gen
 
-        gradient_fn_gen_AB = jax.jit(jax.value_and_grad(generatorAB_loss_fn, has_aux=True))
-        gradient_fn_gen_BA = jax.jit(jax.value_and_grad(generatorBA_loss_fn, has_aux=True))
+        #gradient_fn_gen_AB = jax.jit(jax.value_and_grad(generatorAB_loss_fn, has_aux=True))
+        #gradient_fn_gen_BA = jax.jit(jax.value_and_grad(generatorBA_loss_fn, has_aux=True))
+
+        @jax.jit
+        def generator_loss_fn(data_A, data_B, params, states):
+            generator_AB_params, generator_BA_params, discriminator_A_params, discriminator_B_params = params
+            generator_AB_state, generator_BA_state, discriminator_A_state, discriminator_B_state = states
+            fake_B, fake_state_genAB = forward_fn_gen_AB(generator_AB_params, generator_AB_state, data_A)
+            fake_A, fake_state_genBA = forward_fn_gen_BA(generator_BA_params, generator_BA_state, data_B)
+            # TODO: Unsure whether BA and AB states should be reversed below
+            recov_A, recov_state_genBA = forward_fn_gen_BA(generator_BA_params, fake_state_genBA, fake_B)
+            recov_B, recov_state_genAB = forward_fn_gen_AB(generator_AB_params, fake_state_genAB, fake_A)
+            gan_loss = -(jnp.mean(jnp.log(nn.sigmoid(forward_fn_dis_A(discriminator_A_params, discriminator_A_state, fake_A)[0]))) + jnp.mean(jnp.log(nn.sigmoid(forward_fn_dis_B(discriminator_B_params, discriminator_B_state, fake_B)[0]))))
+            cycle_loss = jnp.mean(jnp.sum(jnp.abs(data_A-recov_A), axis=-1)) + jnp.mean(jnp.sum(jnp.abs(data_B-recov_B), axis=-1))
+            return gan_loss - cycle_loss, (recov_state_genBA, recov_state_genAB)
         
+        gradient_fn_gen = jax.jit(jax.value_and_grad(generator_loss_fn, has_aux=True))
+
         epochs = tqdm(range(num_epochs))
         generator_loss = []
         discriminator_loss = []
@@ -115,29 +119,31 @@ class CycleGAN(DifferentiableLearningSystem):
                 self.__discriminator_B.step(dB_batch, dB_labels)
 
                 ## Update Generators
-                (loss_genAB, new_state_genAB), gradsAB = gradient_fn_gen_AB(
-                    self.__generator_AB.parameters_,
-                    self.__generator_AB.state_,
-                    self.__discriminator_B.parameters_,
-                    self.__discriminator_B.state_,
-                    real_A)
-                
-                (loss_genBA, new_state_genBA), gradsBA = gradient_fn_gen_BA(
-                    self.__generator_BA.parameters_,
-                    self.__generator_BA.state_,
-                    self.__discriminator_A.parameters_,
-                    self.__discriminator_A.state_,
-                    real_B)
-                
-                self.__generator_AB.manual_step_with_optimizer(gradsAB, new_state_genAB)
-                self.__generator_BA.manual_step_with_optimizer(gradsBA, new_state_genBA)
+                #(loss_genAB, new_state_genAB), gradsAB = gradient_fn_gen_AB(
+                #    self.__generator_AB.parameters_,
+                #    self.__generator_AB.state_,
+                #    self.__discriminator_B.parameters_,
+                #    self.__discriminator_B.state_,
+                #    real_A)
+                #
+                #(loss_genBA, new_state_genBA), gradsBA = gradient_fn_gen_BA(
+                #    self.__generator_BA.parameters_,
+                #    self.__generator_BA.state_,
+                #    self.__discriminator_A.parameters_,
+                #    self.__discriminator_A.state_,
+                #    real_B)
+                gen_params = (self.__generator_AB.parameters_, self.__generator_BA.parameters_, self.__discriminator_A.parameters_, self.__discriminator_B.parameters_)
+                gen_states = (self.__generator_AB.state_, self.__generator_BA.state_, self.__discriminator_A.state_, self.__discriminator_A.state_)
+                (loss_gen, (new_state_genBA, new_state_genAB)), grads = gradient_fn_gen(real_A, real_B, gen_params, gen_states)
+                self.__generator_AB.manual_step_with_optimizer(grads, new_state_genAB)
+                self.__generator_BA.manual_step_with_optimizer(grads, new_state_genBA)
 
                 if i % print_every == 0:
                     dA_loss = self.__discriminator_A.compute_loss(dA_batch, dA_labels)
                     dB_loss = self.__discriminator_B.compute_loss(dB_batch, dB_labels)
                     #dis_grads = self.__discriminator_A.eval_gradients(dA_batch, dA_labels) + self.__discriminator_B.eval_gradients(dB_batch, dB_labels)
                     loss_dis = dA_loss + dB_loss
-                    loss_gen = loss_genAB + loss_genBA
+                    #loss_gen = loss_genAB + loss_genBA
                     #gen_grads = gradsAB + gradsBA
 
                     total_gen_elements = 0

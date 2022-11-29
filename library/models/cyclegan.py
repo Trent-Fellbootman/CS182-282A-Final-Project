@@ -70,7 +70,10 @@ class CycleGAN(DifferentiableLearningSystem):
               batch_size: int = 32,
               num_epochs: int = 10,
               key: random.KeyArray = random.PRNGKey(0),
-              print_every: int = 10):
+              print_every: int = 10,
+              cycle_loss_weight: float=1.0):
+        
+        gan_weight, cycle_weight = 1.0 / (1 + cycle_loss_weight), cycle_loss_weight / (1 + cycle_loss_weight)
 
         self.__discriminator_A.attach_optimizer(optimizer)
         self.__discriminator_B.attach_optimizer(optimizer)
@@ -82,81 +85,65 @@ class CycleGAN(DifferentiableLearningSystem):
         forward_fn_dis_A = self.__discriminator_A.forward_fn
         forward_fn_dis_B = self.__discriminator_B.forward_fn
 
-        # @jax.jit
-        # def generatorAB_loss_fn(params_gen, state_gen, params_dis, state_dis, data):
-        #    fake, new_state_gen = forward_fn_gen_AB(params_gen, state_gen, data)
-        #    recov = self.__generator_BA(fake)
-        #    return -jnp.mean(jnp.log(nn.sigmoid(forward_fn_dis_B(params_dis, state_dis, fake)[0]))) + jnp.sum(jnp.abs(data-recov)), new_state_gen
-
-        # @jax.jit
-        # def generatorBA_loss_fn(params_gen, state_gen, params_dis, state_dis, data):
-        #    fake, new_state_gen = forward_fn_gen_BA(params_gen, state_gen, data)
-        #    recov = self.__generator_AB(fake)
-        #    return -jnp.mean(jnp.log(nn.sigmoid(forward_fn_dis_A(params_dis, state_dis, fake)[0]))) + jnp.sum(jnp.abs(data-recov)), new_state_gen
-
-        #gradient_fn_gen_AB = jax.jit(jax.value_and_grad(generatorAB_loss_fn, has_aux=True))
-        #gradient_fn_gen_BA = jax.jit(jax.value_and_grad(generatorBA_loss_fn, has_aux=True))
-
         @jax.jit
-        def generator_loss_fn(gen_params: Tuple[Any], gen_states: Tuple[Any], dis_params: Tuple[Any], dis_states: Tuple[Any], batch_A, batch_B):
-            generator_AB_params, generator_BA_params = gen_params
-            generator_AB_state, generator_BA_state = gen_states
+        def generator_AB_loss_fn(gen_AB_params, gen_AB_state, gen_BA_params, gen_BA_state, dis_B_params, dis_B_state, batch_A):
+            fake_B, new_state_gen_AB = forward_fn_gen_AB(
+                gen_AB_params, gen_AB_state, batch_A)
+            recon_A, new_state_gen_BA = forward_fn_gen_BA(
+                gen_BA_params, gen_BA_state, fake_B)
+
+            gan_loss = -jnp.mean(
+                jnp.log(
+                    nn.sigmoid(
+                        forward_fn_dis_B(
+                            dis_B_params, dis_B_state, fake_B)[0])))
             
-            discriminator_A_params, discriminator_B_params = dis_params
-            discriminator_A_state, discriminator_B_state = dis_states
+            cycle_loss = jnp.mean(
+                jnp.abs(recon_A - batch_A)
+            )
             
-            fake_B, fake_state_genAB = forward_fn_gen_AB(
-                generator_AB_params, generator_AB_state, batch_A)
-            fake_A, fake_state_genBA = forward_fn_gen_BA(
-                generator_BA_params, generator_BA_state, batch_B)
-            # TODO: Unsure whether BA and AB states should be reversed below
-            recov_A, recov_state_genBA = forward_fn_gen_BA(
-                generator_BA_params, fake_state_genBA, fake_B)
-            recov_B, recov_state_genAB = forward_fn_gen_AB(
-                generator_AB_params, fake_state_genAB, fake_A)
+            return gan_weight * gan_loss + cycle_weight * cycle_loss, (fake_B, recon_A, gan_loss, cycle_loss, new_state_gen_AB)
+        
+        grad_fn_gen_AB = jax.jit(jax.value_and_grad(generator_AB_loss_fn, has_aux=True))
+        
+        @jax.jit
+        def generator_BA_loss_fn(gen_BA_params, gen_BA_state, gen_AB_params, gen_AB_state, dis_A_params, dis_A_state, batch_B):
+            fake_A, new_state_gen_BA = forward_fn_gen_BA(
+                gen_BA_params, gen_BA_state, batch_B)
+            recon_B, new_state_gen_AB = forward_fn_gen_AB(
+                gen_AB_params, gen_AB_state, fake_A)
 
-            gan_loss = -(
-                jnp.mean(
-                    jnp.log(
-                        nn.sigmoid(
-                            forward_fn_dis_A(
-                                discriminator_A_params, discriminator_A_state, fake_A)[0])))
-                + jnp.mean(
-                    jnp.log(
-                        nn.sigmoid(
-                            forward_fn_dis_B(
-                                discriminator_B_params, discriminator_B_state, fake_B)[0]))))
+            gan_loss = -jnp.mean(
+                jnp.log(
+                    nn.sigmoid(
+                        forward_fn_dis_A(
+                            dis_A_params, dis_A_state, fake_A)[0])))
+            
+            cycle_loss = jnp.mean(
+                jnp.abs(recon_B - batch_B)
+            )
+            
+            return gan_weight * gan_loss + cycle_weight * cycle_loss, (fake_A, recon_B, gan_loss, cycle_loss, new_state_gen_BA)
 
-            # cycle_loss = \
-            #     jnp.mean(
-            #         jnp.sum(
-            #             jnp.abs(batch_A - recov_A),
-            #             axis=-1)) \
-            #     + jnp.mean(
-            #         jnp.sum(
-            #             jnp.abs(batch_B - recov_B),
-            #             axis=-1))
-
-            cycle_loss = \
-                jnp.mean(
-                    jnp.abs(batch_A - recov_A)) \
-                + jnp.mean(
-                    jnp.abs(batch_B - recov_B))
-
-            # return gan_loss - cycle_loss, (recov_state_genBA, recov_state_genAB)
-            return (gan_loss + cycle_loss), (fake_A, fake_B, recov_state_genAB, recov_state_genBA)
-
-        gradient_fn_gen = jax.jit(
-            jax.value_and_grad(
-                generator_loss_fn, has_aux=True))
+        grad_fn_gen_BA = jax.jit(jax.value_and_grad(generator_BA_loss_fn, has_aux=True))
 
         epochs = tqdm(range(num_epochs))
         generator_loss_total = []
         discriminator_loss_total = []
         key, new_key = random.split(key)
-        dataset = datasets.base.TensorDataset((dataset_A.get_tensors(), dataset_B.get_tensors()))
+        dataset = datasets.base.TensorDataset(
+            (dataset_A.get_tensors(), dataset_B.get_tensors()))
         dataloader = datasets.base.DataLoader(
             dataset, batch_size, new_key, auto_reshuffle=True)
+        
+        gen_AB_cycle_losses = []
+        gen_AB_gan_losses = []
+        gen_AB_total_losses = []
+        gen_BA_cycle_losses = []
+        gen_BA_gan_losses = []
+        gen_BA_total_losses = []
+        dis_A_losses = []
+        dis_B_losses = []
 
         for epoch in epochs:
             batches = tqdm(dataloader)
@@ -164,37 +151,40 @@ class CycleGAN(DifferentiableLearningSystem):
 
                 key, new_key_1, new_key2 = random.split(key, 3)
 
-                real_A = batch_A 
+                real_A = batch_A
                 real_B = batch_B
-                
-                (gen_loss_total, (fake_A, fake_B, recov_state_genAB, recov_state_genBA)), \
-                    (grads_gen_AB, grads_gen_BA) = \
-                        gradient_fn_gen(
-                            (self.__generator_AB.parameters_,
-                             self.__generator_BA.parameters_),
 
-                            (self.__generator_AB.state_,
-                             self.__generator_BA.state_),
-
-                            (self.__discriminator_A.parameters_,
-                             self.__discriminator_B.parameters_),
-                            
-                            (self.__discriminator_A.state_,
-                             self.__discriminator_B.state_),
-                            
-                            batch_A, batch_B
-                        )
+                # calculate gradients
+                (total_loss_gen_AB,
+                 (fake_B, recon_A, gan_loss_gen_AB, cycle_loss_gen_AB, new_state_gen_AB)), \
+                     grads_gen_AB = grad_fn_gen_AB(
+                    self.__generator_AB.parameters_,
+                    self.__generator_AB.state_,
+                    self.__generator_BA.parameters_,
+                    self.__generator_BA.state_,
+                    self.__discriminator_B.parameters_,
+                    self.__discriminator_B.state_,
+                    batch_A
+                )
                 
+                (total_loss_gen_BA,
+                 (fake_A, recon_B, gan_loss_gen_BA, cycle_loss_gen_BA, new_state_gen_BA)), \
+                     grads_gen_BA = grad_fn_gen_BA(
+                    self.__generator_BA.parameters_,
+                    self.__generator_BA.state_,
+                    self.__generator_AB.parameters_,
+                    self.__generator_AB.state_,
+                    self.__discriminator_A.parameters_,
+                    self.__discriminator_A.state_,
+                    batch_B
+                )
+
                 # update generators
                 self.__generator_AB.manual_step_with_optimizer(
-                    grads_gen_AB, recov_state_genAB)
+                    grads_gen_AB, new_state_gen_AB)
                 self.__generator_BA.manual_step_with_optimizer(
-                    grads_gen_BA, recov_state_genBA)
+                    grads_gen_BA, new_state_gen_BA)
 
-                # Fake samples from generators
-                # fake_A = self.__generator_BA(real_B)
-                # fake_B = self.__generator_AB(real_A)
-                
                 labels_real = jnp.ones((batch_size,))
                 labels_fake = jnp.zeros((batch_size,))
 
@@ -207,30 +197,19 @@ class CycleGAN(DifferentiableLearningSystem):
 
                 dB_batch, dB_labels = self.combine_batches(
                     real_B, fake_B, labels_real, labels_fake, new_key2)
-                
+
                 # update discriminator B
                 self.__discriminator_B.step(dB_batch, dB_labels)
-
-                # Update Generators
-                # (loss_genAB, new_state_genAB), gradsAB = gradient_fn_gen_AB(
-                #    self.__generator_AB.parameters_,
-                #    self.__generator_AB.state_,
-                #    self.__discriminator_B.parameters_,
-                #    self.__discriminator_B.state_,
-                #    real_A)
-                #
-                # (loss_genBA, new_state_genBA), gradsBA = gradient_fn_gen_BA(
-                #    self.__generator_BA.parameters_,
-                #    self.__generator_BA.state_,
-                #    self.__discriminator_A.parameters_,
-                #    self.__discriminator_A.state_,
-                #    real_B)
-                # gen_params = (self.__generator_AB.parameters_, self.__generator_BA.parameters_,
-                #               self.__discriminator_A.parameters_, self.__discriminator_B.parameters_)
-                # gen_states = (self.__generator_AB.state_, self.__generator_BA.state_,
-                #               self.__discriminator_A.state_, self.__discriminator_A.state_)
-                # (loss_gen, (new_state_genBA, new_state_genAB)), grads = gradient_fn_gen(
-                #     real_A, real_B, gen_params, gen_states)
+                
+                # logs
+                gen_AB_cycle_losses.append(cycle_loss_gen_AB)
+                gen_AB_gan_losses.append(gan_loss_gen_AB)
+                gen_AB_total_losses.append(total_loss_gen_AB)
+                gen_BA_cycle_losses.append(cycle_loss_gen_BA)
+                gen_BA_gan_losses.append(gan_loss_gen_BA)
+                gen_BA_total_losses.append(total_loss_gen_BA)
+                dis_A_losses.append(self.__discriminator_A.compute_loss(dA_batch, dA_labels))
+                dis_B_losses.append(self.__discriminator_B.compute_loss(dB_batch, dB_labels))
 
                 if i % print_every == 0:
                     dA_loss = self.__discriminator_A.compute_loss(
@@ -239,23 +218,36 @@ class CycleGAN(DifferentiableLearningSystem):
                         dB_batch, dB_labels)
 
                     # dis_grads = self.__discriminator_A.eval_gradients(dA_batch, dA_labels) + self.__discriminator_B.eval_gradients(dB_batch, dB_labels)
-                    dis_grads_A = self.__discriminator_A.eval_gradients(dA_batch, dA_labels)
-                    dis_grads_B = self.__discriminator_B.eval_gradients(dB_batch, dB_labels)
+                    dis_grads_A = self.__discriminator_A.eval_gradients(
+                        dA_batch, dA_labels)
+                    dis_grads_B = self.__discriminator_B.eval_gradients(
+                        dB_batch, dB_labels)
 
                     loss_dis_total = dA_loss + dB_loss
                     #loss_gen = loss_genAB + loss_genBA
                     #gen_grads = gradsAB + gradsBA
 
-                    total_gen_elements = 0
-                    total_gen_norm_squared = 0
+                    total_gen_AB_elements = 0
+                    total_gen_AB_norm_squared = 0
 
-                    def add_gen_elements(x: jnp.ndarray):
-                        nonlocal total_gen_elements
-                        total_gen_elements += jnp.size(x)
+                    def add_gen_AB_elements(x: jnp.ndarray):
+                        nonlocal total_gen_AB_elements
+                        total_gen_AB_elements += jnp.size(x)
 
-                    def add_gen_norm(x: jnp.ndarray):
-                        nonlocal total_gen_norm_squared
-                        total_gen_norm_squared += jnp.linalg.norm(x) ** 2
+                    def add_gen_AB_norm(x: jnp.ndarray):
+                        nonlocal total_gen_AB_norm_squared
+                        total_gen_AB_norm_squared += jnp.linalg.norm(x) ** 2
+                    
+                    total_gen_BA_elements = 0
+                    total_gen_BA_norm_squared = 0
+
+                    def add_gen_BA_elements(x: jnp.ndarray):
+                        nonlocal total_gen_BA_elements
+                        total_gen_BA_elements += jnp.size(x)
+
+                    def add_gen_BA_norm(x: jnp.ndarray):
+                        nonlocal total_gen_BA_norm_squared
+                        total_gen_BA_norm_squared += jnp.linalg.norm(x) ** 2
 
                     #tree_util.tree_map(add_gen_elements, gen_grads)
                     #tree_util.tree_map(add_gen_norm, gen_grads)
@@ -270,7 +262,7 @@ class CycleGAN(DifferentiableLearningSystem):
                     def add_dis_A_norm(x: jnp.ndarray):
                         nonlocal total_dis_A_norm_squared
                         total_dis_A_norm_squared += jnp.linalg.norm(x) ** 2
-                        
+
                     total_dis_B_elements = 0
                     total_dis_B_norm_squared = 0
 
@@ -282,25 +274,45 @@ class CycleGAN(DifferentiableLearningSystem):
                         nonlocal total_dis_B_norm_squared
                         total_dis_B_norm_squared += jnp.linalg.norm(x) ** 2
 
-                    tree_util.tree_map(add_gen_elements, (grads_gen_AB, grads_gen_BA))
-                    tree_util.tree_map(add_gen_norm, (grads_gen_AB, grads_gen_BA))
+                    tree_util.tree_map(
+                        add_gen_AB_elements, grads_gen_AB)
+                    tree_util.tree_map(
+                        add_gen_AB_norm, grads_gen_AB)
                     
+                    tree_util.tree_map(
+                        add_gen_BA_elements, grads_gen_BA)
+                    tree_util.tree_map(
+                        add_gen_BA_norm, grads_gen_BA)
+
                     tree_util.tree_map(add_dis_A_elements, dis_grads_A)
                     tree_util.tree_map(add_dis_A_norm, dis_grads_A)
-                    
+
                     tree_util.tree_map(add_dis_B_elements, dis_grads_B)
                     tree_util.tree_map(add_dis_B_norm, dis_grads_B)
+                    
+                    grad_magnitude_gen_AB = sqrt(total_gen_AB_norm_squared / total_gen_AB_elements)
+                    grad_magnitude_gen_BA = sqrt(total_gen_BA_norm_squared / total_gen_BA_elements)
+                    grad_magnitude_dis_A = sqrt(total_dis_A_norm_squared / total_dis_A_elements)
+                    grad_magnitude_dis_B = sqrt(total_dis_B_norm_squared / total_dis_B_elements)
 
                     batches.set_description(
-                        f'iteration {i}; gen_loss: {gen_loss_total: .2e}; dis_A_loss: {dA_loss: .2e}; dis_B_loss: {dB_loss: .2e}')
-                    generator_loss_total.append(gen_loss_total)
-                    discriminator_loss_total.append(loss_dis_total)
-        return generator_loss_total, discriminator_loss_total
+                        f'iteration {i}; g_AB_l_g: {gan_loss_gen_AB: .2e} g_AB_l_c: {cycle_loss_gen_AB: .2e}; g_BA_l_g: {gan_loss_gen_BA: .2e} g_BA_l_c: {cycle_loss_gen_BA: .2e}; d_A_l: {dA_loss: .2e}; d_B_l: {dB_loss: .2e}; g_AB_gm: {grad_magnitude_gen_AB: .2e}; g_BA_gm: {grad_magnitude_gen_BA: .2e}; dis_A_gm: {grad_magnitude_dis_A: .2e}; dis_B_gm: {grad_magnitude_dis_B: .2e}')
+
+        return {
+            'gen_AB_cycle_losses': gen_AB_cycle_losses,
+            'gen_AB_gan_losses': gen_AB_gan_losses,
+            'gen_AB_total_losses': gen_AB_total_losses,
+            'gen_BA_cycle_losses': gen_BA_cycle_losses,
+            'gen_BA_gan_losses': gen_BA_gan_losses,
+            'gen_BA_total_losses': gen_BA_total_losses,
+            'dis_A_losses': dis_A_losses,
+            'dis_B_losses': dis_B_losses
+        }
 
     def combine_batches(self, data_a, data_b, label_a: jnp.array, label_b: jnp.array, key: random.KeyArray = None):
         combined_examples = jnp.concatenate([data_a, data_b], axis=0)
         labels = jnp.concatenate([label_a, label_b], axis=0)
-        
+
         return random.permutation(key, combined_examples), random.permutation(key, labels)
 
     def create_distribution(self):

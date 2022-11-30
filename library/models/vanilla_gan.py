@@ -153,7 +153,7 @@ class VanillaGAN(DifferentiableLearningSystem):
                     tree_util.tree_map(add_dis_norm, dis_grads)
 
                     batches.set_description(
-                        f'iteration {i}; gen_loss: {loss_gen: .2e}; dis_loss: {dis_loss: .2e}; gen_grads_magnitude: {sqrt(total_gen_norm_squared / total_gen_elements): .2e}; dis_grads_magnitude: {sqrt(total_dis_norm_squared / total_dis_elements): .2e}')
+                        f'epoch {epoch}; gen_loss: {loss_gen: .2e}; dis_loss: {dis_loss: .2e}; gen_grads_magnitude: {sqrt(total_gen_norm_squared / total_gen_elements): .2e}; dis_grads_magnitude: {sqrt(total_dis_norm_squared / total_dis_elements): .2e}')
                     # batches.set_description(
                     #     f'iteration {i}; dis_loss: {dis_loss: .2e}; dis_grads_magnitude: {sqrt(total_dis_norm_squared / total_dis_elements): .2e}')
 

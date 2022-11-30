@@ -313,7 +313,7 @@ class CycleGAN(DifferentiableLearningSystem):
                     grad_magnitude_dis_B = sqrt(total_dis_B_norm_squared / total_dis_B_elements)
 
                     batches.set_description(
-                        f'iteration {i}; g_AB_l_g: {gan_loss_gen_AB: .2e} g_AB_l_c: {cycle_loss_gen_AB: .2e}; g_BA_l_g: {gan_loss_gen_BA: .2e} g_BA_l_c: {cycle_loss_gen_BA: .2e}; d_A_l: {dA_loss: .2e}; d_B_l: {dB_loss: .2e}; g_AB_gm: {grad_magnitude_gen_AB: .2e}; g_BA_gm: {grad_magnitude_gen_BA: .2e}; dis_A_gm: {grad_magnitude_dis_A: .2e}; dis_B_gm: {grad_magnitude_dis_B: .2e}')
+                        f'epoch {epoch}; g_AB_l_g: {gan_loss_gen_AB: .2e} g_AB_l_c: {cycle_loss_gen_AB: .2e}; g_BA_l_g: {gan_loss_gen_BA: .2e} g_BA_l_c: {cycle_loss_gen_BA: .2e}; d_A_l: {dA_loss: .2e}; d_B_l: {dB_loss: .2e}; g_AB_gm: {grad_magnitude_gen_AB: .2e}; g_BA_gm: {grad_magnitude_gen_BA: .2e}; dis_A_gm: {grad_magnitude_dis_A: .2e}; dis_B_gm: {grad_magnitude_dis_B: .2e}')
 
         return {
             'gen_AB_cycle_losses': gen_AB_cycle_losses,

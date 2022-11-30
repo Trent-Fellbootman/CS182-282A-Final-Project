@@ -60,20 +60,25 @@ class VanillaGAN(DifferentiableLearningSystem):
             """_summary_
 
             Args:
-                params_gen (_type_): _description_
-                state_gen (_type_): _description_
-                params_dis (_type_): _description_
+                params_gen (_type_): parameters of the generator
+                state_gen (_type_): state of the generator
+                params_dis (_type_): parameters of
                 state_dis (_type_): _description_
                 random_noise (_type_): _description_
 
             Returns:
                 fake samples, new state for generator
             """
-
+            ##############################################
+            # TODO: Implement GAN loss function          #
+            # HINT:                                      #
+            ##############################################
             fake, new_state_gen = forward_fn_gen(
                 params_gen, state_gen, random_noise)
             return -jnp.mean(jnp.log(nn.sigmoid(forward_fn_dis(params_dis, state_dis, fake)[0]))), new_state_gen
-
+            ##############################################
+            #               END OF YOUR CODE             #
+            ##############################################
         gradient_fn_gen = jax.jit(
             jax.value_and_grad(loss_fn_gen_combined, has_aux=True))
 
@@ -92,6 +97,11 @@ class VanillaGAN(DifferentiableLearningSystem):
 
                 # random_noise = random.normal(
                 #     new_key1, (batch_size, *self.__latent_shape))
+
+                ##############################################
+                # TODO: Update generator and discriminator   #
+                # HINT:                                      #
+                ##############################################
                 random_noise = random.uniform(
                     new_key1, (batch_size, *self.__latent_shape), minval=-1, maxval=1)
 
@@ -104,7 +114,7 @@ class VanillaGAN(DifferentiableLearningSystem):
                     x_batch, fake, labels_real, labels_fake, new_key2)
 
                 self.__discriminator.step(combined_batch, combined_labels)
-
+                
                 # Update generator
                 (loss_gen, new_state_gen), grads = gradient_fn_gen(
                     self.__generator.parameters_,
@@ -116,6 +126,9 @@ class VanillaGAN(DifferentiableLearningSystem):
 
                 self.__generator.manual_step_with_optimizer(
                     grads, new_state_gen)
+                ##############################################
+                #               END OF YOUR CODE             #
+                ##############################################
 
                 if i % print_every == 0:
                     dis_loss = self.__discriminator.compute_loss(
@@ -153,9 +166,9 @@ class VanillaGAN(DifferentiableLearningSystem):
                     tree_util.tree_map(add_dis_norm, dis_grads)
 
                     batches.set_description(
-                        f'epoch {epoch}; gen_loss: {loss_gen: .2e}; dis_loss: {dis_loss: .2e}; gen_grads_magnitude: {sqrt(total_gen_norm_squared / total_gen_elements): .2e}; dis_grads_magnitude: {sqrt(total_dis_norm_squared / total_dis_elements): .2e}')
+                        f'Epoch {epoch}; Generator loss: {loss_gen: .4f}; Discriminator loss: {dis_loss: .4f}')
                     # batches.set_description(
-                    #     f'iteration {i}; dis_loss: {dis_loss: .2e}; dis_grads_magnitude: {sqrt(total_dis_norm_squared / total_dis_elements): .2e}')
+                    #     f'iteration {i}; gen_loss: {gen_loss: .2e}; dis_loss: {dis_loss: .2e}; dis_grads_magnitude: {sqrt(total_dis_norm_squared / total_dis_elements): .2e}')
 
             # epochs.set_description(f'iteration {epoch}; gen_loss: {loss_gen}; dis_loss: {d_loss}')
 

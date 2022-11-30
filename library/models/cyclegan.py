@@ -368,6 +368,13 @@ class GANDistribution(datasets.base.Distribution):
         super().__init__()
 
         self.__generator = generator
+    
+    @property
+    def generator(self):
+        """Returns the underlying generator.
+        """
+
+        return self.__generator
 
     def draw_samples(self, samples: jnp.array):
         """_summary_

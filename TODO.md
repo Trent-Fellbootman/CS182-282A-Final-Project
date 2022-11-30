@@ -4,5 +4,3 @@
 - Make student and solution code parts
 - Solution checks
 - Write 3-5 page paper on how our homework connects to CycleGAN
-
-

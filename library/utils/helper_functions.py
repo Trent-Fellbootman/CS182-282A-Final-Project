@@ -24,8 +24,8 @@ def plot_reconstructed_samples(real_A, real_B, recon_A, recon_B):
     fig = make_subplots(rows=1, cols=2, subplot_titles = ["Distribution A", "Distribution B"])
     fig.add_trace(go.Scatter(x=real_A[:, 0], y=real_A[:, 1], mode='markers', marker=dict(color="blue", size=2.5),name='Real A'), row=1, col=1)
     fig.add_trace(go.Scatter(x=real_B[:, 0], y=real_B[:, 1], mode='markers', marker=dict(color="green", size=2.5),name='Real B'), row=1, col=2)
-    fig.add_trace(go.Scatter(x=recon_A[:, 0], y=recon_A[:, 1], mode='markers', marker=dict(color="red", size=2.5),name='recon_A'), row=1, col=1)
-    fig.add_trace(go.Scatter(x=recon_B[:, 0], y=recon_B[:, 1], mode='markers', marker=dict(color="purple", size=2.5),name='recon_B'), row=1, col=2)
+    fig.add_trace(go.Scatter(x=recon_A[:, 0], y=recon_A[:, 1], mode='markers', marker=dict(color="red", size=2.5),name='Reconstructed A'), row=1, col=1)
+    fig.add_trace(go.Scatter(x=recon_B[:, 0], y=recon_B[:, 1], mode='markers', marker=dict(color="purple", size=2.5),name='Reconstructed B'), row=1, col=2)
     fig.update_layout(title_text="Real samples and reconstructed samples from the trained generators")
     fig.show()
 

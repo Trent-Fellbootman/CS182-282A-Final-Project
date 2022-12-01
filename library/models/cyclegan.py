@@ -200,12 +200,12 @@ class CycleGAN(DifferentiableLearningSystem):
                 self.__discriminator_B.step(dB_batch, dB_labels)
                 
                 # logs
-                gen_AB_cycle_losses.append(cycle_loss_gen_AB)
-                gen_AB_gan_losses.append(gan_loss_gen_AB)
-                gen_BA_cycle_losses.append(cycle_loss_gen_BA)
-                gen_BA_gan_losses.append(gan_loss_gen_BA)
-                dis_A_losses.append(self.__discriminator_A.compute_loss(dA_batch, dA_labels))
-                dis_B_losses.append(self.__discriminator_B.compute_loss(dB_batch, dB_labels))
+                gen_AB_cycle_losses.append(cycle_loss_gen_AB.item())
+                gen_AB_gan_losses.append(gan_loss_gen_AB.item())
+                gen_BA_cycle_losses.append(cycle_loss_gen_BA.item())
+                gen_BA_gan_losses.append(gan_loss_gen_BA.item())
+                dis_A_losses.append(self.__discriminator_A.compute_loss(dA_batch, dA_labels).item())
+                dis_B_losses.append(self.__discriminator_B.compute_loss(dB_batch, dB_labels).item())
 
                 if i % print_every == 0:
                     dA_loss = self.__discriminator_A.compute_loss(

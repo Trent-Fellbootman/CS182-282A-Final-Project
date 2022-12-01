@@ -101,11 +101,11 @@ class CycleGAN(DifferentiableLearningSystem):
                 jnp.log(
                     nn.sigmoid(
                         forward_fn_dis_B(
-                            dis_B_params, dis_B_state, fake_B)[0])))
+                            dis_B_params, dis_B_state, fake_B)[0]))) # TODO: Compute GAN loss
             
             cycle_loss = jnp.mean(
                 jnp.abs(recon_A - batch_A)
-            )
+            ) # TODO: Compute cycle loss
             
             return gan_weight * gan_loss + cycle_weight * cycle_loss, (fake_B, recon_A, gan_loss, cycle_loss, new_state_gen_AB)
         
@@ -120,11 +120,11 @@ class CycleGAN(DifferentiableLearningSystem):
                 jnp.log(
                     nn.sigmoid(
                         forward_fn_dis_A(
-                            dis_A_params, dis_A_state, fake_A)[0])))
+                            dis_A_params, dis_A_state, fake_A)[0]))) # TODO: Compute GAN loss
             
             cycle_loss = jnp.mean(
                 jnp.abs(recon_B - batch_B)
-            )
+            ) # TODO: Compute cycle loss
             
             return gan_weight * gan_loss + cycle_weight * cycle_loss, (fake_A, recon_B, gan_loss, cycle_loss, new_state_gen_BA)
         ##############################################
@@ -177,10 +177,6 @@ class CycleGAN(DifferentiableLearningSystem):
                                           self.__discriminator_B.state_,
                                           batch_A, batch_B)
 
-                ##############################################
-                # TODO: Update generators and discriminators #
-                # HINT:                                      #
-                ##############################################
                 # update generators
                 self.__generator_AB.manual_step_with_optimizer(
                     grads_gen_AB, new_state_gen_AB)
@@ -202,17 +198,14 @@ class CycleGAN(DifferentiableLearningSystem):
 
                 # update discriminator B
                 self.__discriminator_B.step(dB_batch, dB_labels)
-                ##############################################
-                #               END OF YOUR CODE             #
-                ##############################################
                 
                 # logs
-                gen_AB_cycle_losses.append(cycle_loss_gen_AB)
-                gen_AB_gan_losses.append(gan_loss_gen_AB)
-                gen_BA_cycle_losses.append(cycle_loss_gen_BA)
-                gen_BA_gan_losses.append(gan_loss_gen_BA)
-                dis_A_losses.append(self.__discriminator_A.compute_loss(dA_batch, dA_labels))
-                dis_B_losses.append(self.__discriminator_B.compute_loss(dB_batch, dB_labels))
+                gen_AB_cycle_losses.append(cycle_loss_gen_AB.item())
+                gen_AB_gan_losses.append(gan_loss_gen_AB.item())
+                gen_BA_cycle_losses.append(cycle_loss_gen_BA.item())
+                gen_BA_gan_losses.append(gan_loss_gen_BA.item())
+                dis_A_losses.append(self.__discriminator_A.compute_loss(dA_batch, dA_labels).item())
+                dis_B_losses.append(self.__discriminator_B.compute_loss(dB_batch, dB_labels).item())
 
                 if i % print_every == 0:
                     dA_loss = self.__discriminator_A.compute_loss(

@@ -70,10 +70,12 @@ class VanillaGAN(DifferentiableLearningSystem):
             """
             ######################################################################
             # TODO: Implement GAN loss function                                  #
-            # HINT: Use forward_fn_gen and forward_fn_dis to calculate the loss  #
+            # HINT: Use forward_fn_gen and forward_fn_dis to calculate the loss. #
+            # Remember that forward_fn_dis ouputs logits.
             ######################################################################
             fake, new_state_gen = #TODO
-            return #TODO
+            loss = #TODO
+            return loss, new_state_gen
             ######################################################################
             #               END OF YOUR CODE                                     #
             ######################################################################
@@ -92,6 +94,10 @@ class VanillaGAN(DifferentiableLearningSystem):
             for i, x_batch in enumerate(batches):
 
                 key, new_key1, new_key2 = random.split(key, 3)
+
+                random_noise = random.uniform(
+                new_key1, (batch_size, *self.__latent_shape), minval=-1, maxval=1)
+
 
                 fake = self.__generator(random_noise)
                 labels_real = jnp.ones((batch_size,))

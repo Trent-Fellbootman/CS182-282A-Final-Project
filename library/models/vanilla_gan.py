@@ -109,10 +109,6 @@ class VanillaGAN(DifferentiableLearningSystem):
                 combined_batch, combined_labels = self.combine_datasets(
                     x_batch, fake, labels_real, labels_fake, new_key2)
 
-                ##############################################
-                # TODO: Update generator and discriminator   #
-                # HINT:                                      #
-                ##############################################
                 self.__discriminator.step(combined_batch, combined_labels)
                 
                 # Update generator
@@ -126,9 +122,6 @@ class VanillaGAN(DifferentiableLearningSystem):
 
                 self.__generator.manual_step_with_optimizer(
                     grads, new_state_gen)
-                ##############################################
-                #               END OF YOUR CODE             #
-                ##############################################
 
                 if i % print_every == 0:
                     dis_loss = self.__discriminator.compute_loss(

@@ -365,7 +365,7 @@ class CycleGAN(DifferentiableLearningSystem):
                     tree_util.tree_map(add_dis_B_norm, dis_grads_B)
 
                     batches.set_description(
-                        f'Epoch {epoch}; Generator AB GAN loss: {gan_loss_gen_AB: .4f}; Generator BA GAN loss: {gan_loss_gen_BA: .4f}; Generator AB Cycle loss: {cycle_loss_gen_AB: .4f}; Generator BA Cycle loss: {cycle_loss_gen_BA: .4f}; Discriminator A loss: {dA_loss: .4f}; Discriminator B loss: {dB_loss: .4f}')
+                        f'Epoch {epoch}; Generator AB GAN loss: {gan_loss_gen_AB: .4f}; Generator BA GAN loss: {gan_loss_gen_BA: .4f}; B->A->B cycle loss: {cycle_loss_gen_AB: .4f}; A->B->A cycle loss: {cycle_loss_gen_BA: .4f}; Discriminator A loss: {dA_loss: .4f}; Discriminator B loss: {dB_loss: .4f}')
 
                     #grad_magnitude_gen_AB = sqrt(total_gen_AB_norm_squared / total_gen_AB_elements)
                     #grad_magnitude_gen_BA = sqrt(total_gen_BA_norm_squared / total_gen_BA_elements)

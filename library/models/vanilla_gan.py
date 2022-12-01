@@ -98,10 +98,6 @@ class VanillaGAN(DifferentiableLearningSystem):
                 # random_noise = random.normal(
                 #     new_key1, (batch_size, *self.__latent_shape))
 
-                ##############################################
-                # TODO: Update generator and discriminator   #
-                # HINT:                                      #
-                ##############################################
                 random_noise = random.uniform(
                     new_key1, (batch_size, *self.__latent_shape), minval=-1, maxval=1)
 
@@ -113,6 +109,10 @@ class VanillaGAN(DifferentiableLearningSystem):
                 combined_batch, combined_labels = self.combine_datasets(
                     x_batch, fake, labels_real, labels_fake, new_key2)
 
+                ##############################################
+                # TODO: Update generator and discriminator   #
+                # HINT:                                      #
+                ##############################################
                 self.__discriminator.step(combined_batch, combined_labels)
                 
                 # Update generator

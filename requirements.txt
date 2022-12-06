@@ -1,0 +1,7 @@
+flax==0.6.2
+jax==0.3.25
+matplotlib==3.6.2
+optax==0.1.4
+plotly==5.11.0
+torch==1.13.0
+tqdm==4.64.1

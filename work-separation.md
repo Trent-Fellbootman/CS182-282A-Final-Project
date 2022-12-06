@@ -1,2 +1,0 @@
-- Trent: Framework for solution checker
-- Jesper & AK: Finalize homework notebooks and make student/solution Python files

@@ -90,6 +90,21 @@ class CycleGAN(DifferentiableLearningSystem):
         # TODO: Define GAN and cycle-consistency     #
         # loss for each generator.                   #
         # HINT:                                      #
+        # 1) Use forward_fn_dis to construct the     #
+        # GAN loss. Remember that the function       #
+        # output logits.                             #
+        # 2) In the cycle loss compare the true      #
+        # samples to the reconstructed samples.      #
+        # 3) The generator loss should be the        #
+        # average nagative log-probability that the  #
+        # classifies the samples is generates as     #
+        # real                                       #
+        # 4) The cycle loss should be the average of #
+        # the absolute difference between the        #
+        # original and the reconstructed samples     #
+        # (note that you need to take the average    #
+        # over not only the samples, but also the    #
+        # different entries in each sample)          #
         ##############################################
 
         @jax.jit
@@ -365,7 +380,7 @@ class CycleGAN(DifferentiableLearningSystem):
                     tree_util.tree_map(add_dis_B_norm, dis_grads_B)
 
                     batches.set_description(
-                        f'Epoch {epoch}; Generator AB GAN loss: {gan_loss_gen_AB: .4f}; Generator BA GAN loss: {gan_loss_gen_BA: .4f}; B->A->B cycle loss: {cycle_loss_gen_AB: .4f}; A->B->A cycle loss: {cycle_loss_gen_BA: .4f}; Discriminator A loss: {dA_loss: .4f}; Discriminator B loss: {dB_loss: .4f}')
+                        f'Epoch {epoch}; Generator AB GAN loss: {gan_loss_gen_AB: .4f}; Generator BA GAN loss: {gan_loss_gen_BA: .4f}; B->A->B cycle loss: {cycle_loss_gen_BA: .4f}; A->B->A cycle loss: {cycle_loss_gen_AB: .4f}; Discriminator A loss: {dA_loss: .4f}; Discriminator B loss: {dB_loss: .4f}')
 
                     #grad_magnitude_gen_AB = sqrt(total_gen_AB_norm_squared / total_gen_AB_elements)
                     #grad_magnitude_gen_BA = sqrt(total_gen_BA_norm_squared / total_gen_BA_elements)

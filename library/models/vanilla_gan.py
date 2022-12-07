@@ -69,16 +69,20 @@ class VanillaGAN(DifferentiableLearningSystem):
             Returns:
                 fake samples, new state for generator
             """
-            ##############################################
-            # TODO: Implement GAN loss function          #
-            # HINT:                                      #
-            ##############################################
+            ######################################################################
+            # TODO: Implement GAN loss function                                  #
+            # HINT: Use forward_fn_gen and forward_fn_dis to calculate the loss. #
+            # Remember that forward_fn_dis ouputs logits.                        #
+            # The generator loss should be the average negative log-probability  #
+            # that the discriminator classifies the samples it generates as real #
+            ######################################################################
             fake, new_state_gen = forward_fn_gen(
                 params_gen, state_gen, random_noise)
-            return -jnp.mean(jnp.log(nn.sigmoid(forward_fn_dis(params_dis, state_dis, fake)[0]))), new_state_gen
+            loss = -jnp.mean(jnp.log(nn.sigmoid(forward_fn_dis(params_dis, state_dis, fake)[0])))
             ##############################################
             #               END OF YOUR CODE             #
             ##############################################
+            return loss, new_state_gen
         gradient_fn_gen = jax.jit(
             jax.value_and_grad(loss_fn_gen_combined, has_aux=True))
 

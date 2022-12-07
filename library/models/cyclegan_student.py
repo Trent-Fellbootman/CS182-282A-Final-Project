@@ -95,7 +95,7 @@ class CycleGAN(DifferentiableLearningSystem):
         # 2) In the cycle loss compare the true      #
         # samples to the reconstructed samples.      #
         # 3) The generator loss should be the        #
-        # average log-probability that the           #
+        # average nagative log-probability that the  #
         # classifies the samples is generates as     #
         # real                                       #
         # 4) The cycle loss should be the average of #
@@ -361,7 +361,7 @@ class CycleGAN(DifferentiableLearningSystem):
                     tree_util.tree_map(add_dis_B_norm, dis_grads_B)
 
                     batches.set_description(
-                        f'Epoch {epoch}; Generator AB GAN loss: {gan_loss_gen_AB: .4f}; Generator BA GAN loss: {gan_loss_gen_BA: .4f}; B->A->B cycle loss: {cycle_loss_gen_AB: .4f}; A->B->A cycle loss: {cycle_loss_gen_BA: .4f}; Discriminator A loss: {dA_loss: .4f}; Discriminator B loss: {dB_loss: .4f}')
+                        f'Epoch {epoch}; Generator AB GAN loss: {gan_loss_gen_AB: .4f}; Generator BA GAN loss: {gan_loss_gen_BA: .4f}; B->A->B cycle loss: {cycle_loss_gen_BA: .4f}; A->B->A cycle loss: {cycle_loss_gen_AB: .4f}; Discriminator A loss: {dA_loss: .4f}; Discriminator B loss: {dB_loss: .4f}')
 
         return {
             'gen_AB_cycle_losses': gen_AB_cycle_losses,

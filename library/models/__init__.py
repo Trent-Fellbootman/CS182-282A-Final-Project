@@ -1,1 +1,1 @@
-from . import base, architectures, cyclegan, vanilla_gan
+from . import base, cyclegan, vanilla_gan

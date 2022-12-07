@@ -93,7 +93,17 @@ class CycleGAN(DifferentiableLearningSystem):
         # GAN loss. Remember that the function       #
         # output logits.                             #
         # 2) In the cycle loss compare the true      #
-        # samples to the reconstructed samples.       #
+        # samples to the reconstructed samples.      #
+        # 3) The generator loss should be the        #
+        # average log-probability that the           #
+        # classifies the samples is generates as     #
+        # real                                       #
+        # 4) The cycle loss should be the average of #
+        # the absolute difference between the        #
+        # original and the reconstructed samples     #
+        # (note that you need to take the average    #
+        # over not only the samples, but also the    #
+        # different entries in each sample)          #
         ##############################################
 
         @jax.jit

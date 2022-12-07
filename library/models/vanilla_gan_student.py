@@ -72,6 +72,8 @@ class VanillaGAN(DifferentiableLearningSystem):
             # TODO: Implement GAN loss function                                  #
             # HINT: Use forward_fn_gen and forward_fn_dis to calculate the loss. #
             # Remember that forward_fn_dis ouputs logits.
+            # The generator loss should be the average log-probability that
+            # the discriminator classifies the samples it generates as real
             ######################################################################
             fake, new_state_gen = #TODO
             loss = #TODO

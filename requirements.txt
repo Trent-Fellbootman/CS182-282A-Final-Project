@@ -1,7 +1,9 @@
 flax==0.6.2
 jax==0.3.25
 matplotlib==3.6.2
+nbformat==5.7.0
 optax==0.1.4
+pandas
 plotly==5.11.0
 torch==1.13.0
 tqdm==4.64.1

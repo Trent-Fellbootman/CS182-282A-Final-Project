@@ -113,9 +113,9 @@ class CycleGAN(DifferentiableLearningSystem):
             recon_A, new_state_gen_BA = forward_fn_gen_BA(
                 gen_BA_params, gen_BA_state, fake_B)
 
-            gan_loss =  # TODO: Compute GAN loss
+            gan_loss = None # TODO: Compute GAN loss
 
-            cycle_loss = # TODO: Compute cycle loss
+            cycle_loss = None # TODO: Compute cycle loss
 
             cycle_weight_ABA = 0 if cycle_loss_mask == 'ABA' else cycle_weight
 
@@ -128,9 +128,9 @@ class CycleGAN(DifferentiableLearningSystem):
             recon_B, new_state_gen_AB = forward_fn_gen_AB(
                 gen_AB_params, gen_AB_state, fake_A)
 
-            gan_loss =  # TODO: Compute GAN loss
+            gan_loss = None # TODO: Compute GAN loss
 
-            cycle_loss =  # TODO: Compute cycle loss
+            cycle_loss = None # TODO: Compute cycle loss
 
             cycle_weight_BAB = 0 if cycle_loss_mask == 'BAB' else cycle_weight
 

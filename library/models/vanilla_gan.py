@@ -75,8 +75,8 @@ class VanillaGAN(DifferentiableLearningSystem):
             # The generator loss should be the average negative log-probability  #
             # that the discriminator classifies the samples it generates as real #
             ######################################################################
-            fake, new_state_gen = #TODO
-            loss = #TODO
+            fake, new_state_gen = None #TODO
+            loss = None #TODO
             ######################################################################
             #               END OF YOUR CODE                                     #
             ######################################################################

@@ -1,0 +1,18 @@
+name: cs182_hw_inf
+channels:
+  - defaults
+  - https://conda.anaconda.org/pytorch
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+    - flax==0.6.2
+    - jax==0.3.25
+    - matplotlib==3.6.2
+    - matplotlib-inline==0.1.6
+    - nbformat==5.7.0
+    - optax==0.1.4
+    - pandas==1.5.2
+    - plotly==5.11.0
+    - tqdm==4.64.1
+    - ipykernel==6.18.1

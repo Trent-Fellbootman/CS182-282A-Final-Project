@@ -4,7 +4,10 @@ channels:
   - https://conda.anaconda.org/pytorch
 dependencies:
   - python=3.10
+<<<<<<< HEAD
   - pip
+=======
+>>>>>>> 68bb1cb (changed requirements.txt to cs182_hw_inf.yml and removed torch dependent)
   - pip:
     - flax==0.6.2
     - jax==0.3.25

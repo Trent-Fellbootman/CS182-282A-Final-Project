@@ -91,13 +91,13 @@ class CycleGAN(DifferentiableLearningSystem):
         # HINT:                                      #
         # 1) Use forward_fn_dis to construct the     #
         # GAN loss. Remember that the function       #
-        # output logits.                             #
+        # outputs logits.                            #
         # 2) In the cycle loss compare the true      #
         # samples to the reconstructed samples.      #
         # 3) The generator loss should be the        #
-        # average nagative log-probability that the  #
-        # classifies the samples is generates as     #
-        # real                                       #
+        # average negative log-probability that      #
+        # the samples generated are classified as    #
+        # real by the discriminator                  #
         # 4) The cycle loss should be the average of #
         # the absolute difference between the        #
         # original and the reconstructed samples     #
